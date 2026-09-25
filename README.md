@@ -594,3 +594,134 @@ Reliability Report — Shows what was verified versus what remains unverified.
 GitHub Repository:
 
 `https://github.com/Adityachaudhari11/Ghost-Hunter-AI`
+
+---
+
+# Implementation Plan
+
+This section is the build plan for Module 1 (AI Code Review Auditor) and Module 2 (AI Pentest Reliability Auditor). Follow phases in order. Do not skip T0 contracts.
+
+## 1. Tech Stack
+
+```text
+Backend:        Python 3.11, FastAPI, Uvicorn, Pydantic v2, asyncio
+Code analysis:  Python `ast`, JS/TS `tree-sitter` (+ Node 20 for parsing helpers)
+Registries:     PyPI JSON API (https://pypi.org/pypi/<pkg>/json),
+                npm registry (https://registry.npmjs.org/<pkg>)
+Similarity:     sentence-transformers + FAISS (fallback: scikit-learn cosine)
+GitHub input:   PyGithub or `gh` CLI + git diff parsing
+Orchestration:  IBM Bob 2.0 subagents via `orchestrator/adapter.py`,
+                fallback: `asyncio.gather()` + direct LLM calls
+Frontend:       React + TypeScript + Vite (read-only report viewer)
+Tests/Lint:     pytest, ruff, tsc, eslint
+```
+
+Shared contracts (define first, before any agent):
+
+* `Finding`: `id, module, severity (CRITICAL|HIGH|MEDIUM|LOW), confidence, file, line_start, line_end, snippet, problem, evidence, suggestion`
+* `ReliabilityReport`: `verified[], unverified[], coverage_pct, flaky[], recovery_attempts[]`
+
+## 2. Phased Tasks
+
+### T0 — Contracts + fixtures (blocks all, ~4h)
+
+* `T0.1` Define `schemas/finding.py` and `schemas/reliability.py` with Pydantic validators.
+* `T0.2` Create `demo-target-repo/` (small owned FastAPI app + `ARCHITECTURE.md`, `AGENTS.md`, `UserRepository.py`, `DateUtils.py`).
+* `T0.3` Create 3 synthetic PR diffs with known ghosts + `expected-findings.json`.
+* `T0.4` Create `pentest_plan.json` + 3 `tool_calls.jsonl` runs (missing check, timeout, contradictory verdict).
+* Done when: `pytest schemas/` passes and fixtures have ground truth.
+
+### T1 — Input layer (~6h)
+
+* `T1.1` PR normalizer: PR URL / local diff -> `changed_files, hunks, new_imports`.
+* `T1.2` Pentest normalizer: plan + jsonl -> normalized run table.
+* `T1.3` Context builder: repo docs -> `architecture_rules.json` (`{rule, source, keywords}`).
+* Done when: fixtures parse without manual fixes.
+
+### T2 — Module 1 deterministic core (~8h, demoable alone)
+
+* `T2.1` Dependency Agent: AST import extract (Py `ast`, JS/TS `tree-sitter`), diff vs `main`, PyPI/npm existence check, unused-import scan.
+* `T2.2` Ghost-Path Agent: AST patterns (`except Exception: pass`, bare `except:`, `return {}/None` fallback, `TODO`, `NotImplementedError`, empty `.catch()`).
+* Done when: synthetic PR yields expected CRITICAL+HIGH with file/line evidence.
+
+### T3 — Module 1 LLM agents (~10h)
+
+* `T3.1` Blueprint Agent: retrieve top-3 rules per hunk, LLM verdict with mandatory `rule_id` citation.
+* `T3.2` Reuse Agent: index existing functions, cosine search (`>0.82 flag, 0.70-0.82 LLM review`), LLM verdict `duplicate/related/novel`.
+* `T3.3` Merger + Final Report builder (dedupe, severity sort, JSON + Markdown).
+* Done when: no finding lacks `evidence + rule_id/confidence`.
+
+### T4 — Module 2 auditors (~10h)
+
+* `T4.1` Coverage Auditor (`planned - executed_ok`) + Failure Auditor (classify `tool-error/timeout/auth/target-unreachable`).
+* `T4.2` Evidence Auditor (claim requires request+response artifact) + Consistency Auditor (diff N=2-3 runs, flag flaky).
+* `T4.3` Recovery Agent: max 2 retries, timeout cap, allowlist `curl, nmap -sV` read-only, denylist exploits/DoS/brute-force, owned demo app only.
+* Done when: missing/failed/weak/flaky cases flagged; 1 retry recovers.
+
+### T5 — API + Dashboard (~6h)
+
+* `T5.1` FastAPI: `POST /review/pr`, `POST /audit/pentest`, `GET /jobs/{id}`, `GET /report/{id}`.
+* `T5.2` React viewer: findings table (filter by severity/module), evidence drawer, verified/unverified gauge.
+* `T5.3` Wire `orchestrator/adapter.py` for Bob 2.0 fan-out/fan-in with asyncio fallback.
+* Done when: `POST` fixture -> `GET` report round-trips locally.
+
+### T6 — Eval + demo (~4h)
+
+* Run manual vs. Ghost-Hunter timing table in `Measuring the Impact`, record real numbers. No assumed percentages.
+* Demo script: `AI PR -> report -> human Fix/Ignore/Investigate`.
+
+Critical path: `T0 -> T1 -> T2 -> T3 -> T5 -> T6`. T4 parallelizes after T0.
+
+## 3. Correct Way to Follow This Plan
+
+1. Work phase by phase. Do not start T2 before T0 validators pass.
+2. One branch per task (`t0-contracts`, `t2-deps`, ...), squash-merge after `pytest + ruff` pass.
+3. Every agent output must validate against `schemas/`. Reject free-text-only findings.
+4. Keep dashboard read-only. No auto-merge, no auto-fix, no live scans outside the owned demo app.
+5. Update this README only with measured results, not projections.
+
+Suggested local loop:
+
+```bash
+python -m venv .venv
+pip install -r requirements.txt
+cp .env.example .env   # then fill in your own keys, never commit .env
+pytest -q
+uvicorn app.main:app --reload
+```
+
+## 4. Credentials Policy (no leaks)
+
+Rules:
+
+```text
+1. Never commit `.env`, `.env.local`, `*.pem`, `*.key`, or any file containing tokens.
+2. Commit only `.env.example` with placeholder values.
+3. `.gitignore` must contain: `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`.
+4. Load secrets only via environment variables (`os.getenv`), never hardcoded.
+5. Do not print secrets in logs/reports. Redact `Authorization`, `token`, `api_key` fields.
+6. If a secret is accidentally committed: rotate it immediately, purge history, do not just delete the file.
+7. Enable GitHub secret scanning / push protection on the repo.
+```
+
+Planned `.env.example` (placeholders only, create when backend work starts — do not create real `.env` in git):
+
+```bash
+# Copy to .env and fill locally. Never commit .env.
+GITHUB_TOKEN=ghp_REPLACE_ME
+LLM_API_KEY=REPLACE_ME
+LLM_BASE_URL=https://REPLACE_ME
+LLM_MODEL=REPLACE_ME
+BOB_API_KEY=REPLACE_ME
+BOB_BASE_URL=https://REPLACE_ME
+REPORT_DIR=./reports
+DEMO_TARGET_REPO=./demo-target-repo
+```
+
+Verify before each commit:
+
+```bash
+git status --porcelain
+git check-ignore -v .env
+grep -r "ghp_\|sk-\|api_key.*[A-Za-z0-9]\{16\}" --exclude-dir=.git --exclude=.env.example . || true
+```
