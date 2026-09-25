@@ -21,7 +21,7 @@ from ..agents.pentest import failure as failure_agent
 from ..agents.pentest import recovery as recovery_agent
 from ..core.evidence import validate_findings
 from ..core.risk_correlator import correlate
-from ..ingesters.context import load_rules, read_manifests
+from ..ingesters.context import load_rules, read_manifests, top_level_modules
 from ..ingesters.diff import parse_diff
 from ..schemas.common import Finding
 from ..schemas.pentest import ReliabilityReport, ToolCall
@@ -60,10 +60,11 @@ async def run_code_review(diff_text: str, repo_dir: str = "", review_id: str = "
     files = parse_diff(diff_text)
     rules = load_rules(repo_dir) if repo_dir else load_rules(".")
     manifests = read_manifests(repo_dir) if repo_dir else {}
+    known_local = top_level_modules(repo_dir) if repo_dir else set()
     sources, index = _full_sources(repo_dir, files)
 
-    dep_t = dependency_agent.run(files, manifests)
-    bp_t = blueprint_agent.run(files, rules)
+    dep_t = dependency_agent.run(files, manifests, None, known_local)
+    bp_t = blueprint_agent.run(files, rules, sources)
     ghost_t = ghost_path_agent.run(files, sources)
     reuse_t = reuse_agent.run(files, sources, index)
     dep, bp, ghost, reuse = await asyncio.gather(dep_t, bp_t, ghost_t, reuse_t)

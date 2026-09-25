@@ -9,8 +9,10 @@ from pathlib import Path
 
 from ..core.config import Settings
 from ..core.logging import get_logger, log_safe
+from ..ingesters.github_repo import materialize
 from ..orchestrator.bob_adapter import BobOrchestrator
 from ..schemas.pentest import ToolCall
+from ..testing.graybox import format_proof_markdown, prove_repo
 
 log = get_logger("cli")
 
@@ -30,6 +32,26 @@ async def _review(args: argparse.Namespace) -> int:
     path = _write(Settings().report_dir, f"{report.review_id}.json", report.model_dump())
     log_safe(log, "review complete", {"review_id": report.review_id, "findings": len(report.findings), "report": path})
     print(json.dumps(report.model_dump(), indent=2))
+    return 0
+
+
+async def _prove(args: argparse.Namespace) -> int:
+    settings = Settings()
+    cleanup = None
+    repo_dir = args.repo_dir
+    if args.repo_url:
+        token = settings.github_token or None
+        if token and "REPLACE_ME" in token:
+            token = None
+        repo_dir, cleanup = materialize(args.repo_url, args.branch or None, token=token)
+    try:
+        report = await prove_repo(repo_dir)
+    finally:
+        if cleanup:
+            cleanup()
+    path = _write(settings.report_dir, f"{report.review_id}.json", report.model_dump())
+    log_safe(log, "proof complete", {"review_id": report.review_id, "findings": len(report.findings), "report": path})
+    print(format_proof_markdown(report))
     return 0
 
 
@@ -61,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--runs", required=True, help="JSON file: list of runs (each a list of ToolCall dicts)")
     a.add_argument("--target", default="local-test-app")
     a.set_defaults(fn=_pentest)
+    v = sub.add_parser("prove-repo", help="Gray-box proof test of a repo link or local dir")
+    v.add_argument("--repo-url", default="", help="https://github.com/<org>/<repo>[/tree/<branch>]")
+    v.add_argument("--repo-dir", default="", help="Local repo dir (alternative to --repo-url)")
+    v.add_argument("--branch", default="", help="Branch to clone (URL flow only)")
+    v.set_defaults(fn=_prove)
     return p
 
 

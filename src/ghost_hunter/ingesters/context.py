@@ -87,3 +87,26 @@ def read_manifests(repo_dir: str | Path) -> dict[str, str]:
         if p.is_file():
             out[name] = p.read_text(encoding="utf-8", errors="ignore")
     return out
+
+
+def top_level_modules(repo_dir: str | Path) -> set[str]:
+    """First-party import roots (dirs), one level deep, normalized.
+
+    Heuristic for the dependency agent so `import ghost_hunter.x` or
+    `import src.lib` is not mistaken for a registry package.
+    """
+    root = Path(repo_dir) if repo_dir else Path(".")
+    mods: set[str] = set()
+    if not root.is_dir():
+        return mods
+    for child in root.iterdir():
+        name = child.name
+        if name.startswith(".") or name in ("node_modules", "__pycache__"):
+            continue
+        mods.add(Path(name).stem.replace("-", "_"))
+        if child.is_dir():
+            for sub in child.iterdir():
+                if sub.name.startswith((".", "_")) or not sub.is_dir():
+                    continue
+                mods.add(sub.name.replace("-", "_"))
+    return mods

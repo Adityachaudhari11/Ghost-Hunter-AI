@@ -7,6 +7,7 @@ Wording: 'unverified dependency / possible hallucination', never 'malicious'.
 
 from __future__ import annotations
 
+import sys
 from typing import Awaitable, Callable
 
 import httpx
@@ -20,6 +21,12 @@ from ...ingesters.diff import (
 from ...schemas.review import ChangedFile
 
 Checker = Callable[[str, str], Awaitable[bool]]  # (ecosystem, package) -> exists?
+
+# Never treat the standard library as an external dependency.
+STDLIB: set[str] = set(getattr(sys, "stdlib_module_names", ())) | {"__future__"}
+
+PY_EXT = (".py",)
+JS_EXT = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")
 
 
 async def _pypi_exists(package: str) -> bool:
@@ -57,24 +64,41 @@ async def run(
     files: list[ChangedFile],
     manifests: dict[str, str] | None = None,
     checker: Checker | None = None,
+    known_local: set[str] | None = None,
 ) -> list[Finding]:
+    """known_local: first-party top-level module names (never external)."""
     manifests = manifests or {}
+    known_local = known_local or set()
     findings: list[Finding] = []
     new_imports = extract_new_imports(files)
     for f in files:
-        for _, text in f.added_lines:
+        # Only lines shaped like real import statements. This kills noise from
+        # string literals that merely mention the word "import".
+        wanted = set(new_imports.get(f.path, []))
+        if not wanted:
+            continue
+        is_py = f.path.endswith(PY_EXT)
+        is_js = f.path.endswith(JS_EXT)
+        if not (is_py or is_js):
+            continue  # manifests/locks/docs are declarations, not imports
+        for lineno, text in f.added_lines:
+            stripped = text.strip()
+            if stripped not in wanted:
+                continue
             pkg = ""
-            eco = _ecosystem(f.path)
-            if f.path.endswith(".py") or ".py" in f.path or eco == "pypi":
-                if text.strip().startswith(("import ", "from ")):
-                    pkg = resolve_python_package(text.strip())
-                    eco = "pypi"
-            if not pkg and ("import" in text or "require" in text):
-                pkg = resolve_js_package(text)
-                if pkg:
-                    eco = "npm"
+            eco = ""
+            if is_py and stripped.startswith(("import ", "from ")):
+                pkg = resolve_python_package(stripped)
+                eco = "pypi"
+            elif is_js and ("import" in stripped or "require" in stripped or stripped.startswith("export")):
+                pkg = resolve_js_package(stripped)
+                eco = "npm"
             if not pkg:
                 continue
+            if pkg in STDLIB or pkg in known_local:
+                continue
+            if pkg.startswith(("@/", "#", "~")):
+                continue  # path aliases / locals, not registry packages
             # only flag packages introduced in added lines that look external
             declared = _declared(pkg, manifests)
             exists: bool | None
@@ -91,12 +115,12 @@ async def run(
                         severity=Severity.CRITICAL,
                         confidence=0.9,
                         file=f.path,
-                        line=0,
+                        line=lineno,
                         rule=f"{eco}:{pkg}",
                         observed=f"Unverified dependency '{pkg}' ({eco}); possible package hallucination",
                         evidence=[
                             Evidence(kind="registry_lookup", description=f"{eco} registry lookup", ref=f"{eco}:{pkg}", data={"exists": False}),
-                            Evidence(kind="code_location", description="New import in diff", ref=f.path, data={"import": text.strip()}),
+                            Evidence(kind="code_location", description="New import in diff", ref=f"{f.path}:{lineno}", data={"import": stripped}),
                             Evidence(kind="manifest_check", description="Declared in project manifests?", ref="manifests", data={"declared": declared}),
                         ],
                         suggestion=f"Verify '{pkg}' exists in {eco}; if real, add to manifests; else remove/replace.",
@@ -112,12 +136,12 @@ async def run(
                         severity=Severity.MEDIUM,
                         confidence=0.7,
                         file=f.path,
-                        line=0,
+                        line=lineno,
                         rule=f"{eco}:{pkg}",
                         observed=f"New dependency '{pkg}' not declared in project manifests",
                         evidence=[
                             Evidence(kind="registry_lookup", description="Registry exists", ref=f"{eco}:{pkg}", data={"exists": True}),
-                            Evidence(kind="manifest_check", description="Missing from manifests", ref="manifests", data={"declared": False}),
+                            Evidence(kind="manifest_check", description="Missing from manifests", ref=f"{f.path}:{lineno}", data={"declared": False}),
                         ],
                         suggestion="Add to requirements/package.json or remove if unneeded.",
                     )
