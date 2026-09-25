@@ -149,13 +149,21 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
+*.pem
+*.key
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Ghost-Hunter reports (local only, may contain code snippets)
+reports/
+*.sarif
 
 # Spyder project settings
 .spyderproject

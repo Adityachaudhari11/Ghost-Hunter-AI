@@ -1,0 +1,12 @@
+name: ghost-hunter-review
+description: Evidence-based AI code review
+inputs:
+  diff-path: {description: diff file, required: true}
+  repo-dir: {description: repo checkout, required: false, default: "."}
+runs:
+  using: composite
+  steps:
+    - run: pip install -r requirements.txt
+      shell: bash
+    - run: PYTHONPATH=src python -m ghost_hunter.cli.main review-pr --diff "${{ inputs.diff-path }}" --repo-dir "${{ inputs.repo-dir }}"
+      shell: bash

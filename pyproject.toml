@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ghost-hunter-ai"
+version = "0.1.0"
+description = "Evidence-based verification layer for AI-generated code and pentest workflows"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "pydantic>=2.0", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+
+[tool.ruff]
+target-version = "py311"

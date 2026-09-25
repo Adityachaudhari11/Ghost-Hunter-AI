@@ -1,0 +1,27 @@
+diff --git a/src/payment_service.py b/src/payment_service.py
+new file mode 100644
+--- /dev/null
++++ b/src/payment_service.py
+@@ -0,0 +1,20 @@
++import superfastjson
++
++def format_date(timestamp):
++    return str(timestamp)
++
++def get_user(user_id):
++    try:
++        cursor.execute(
++            "SELECT * FROM users WHERE id = ?",
++            (user_id,)
++        )
++    except Exception:
++        pass
++
++    return {}
++
++def new_feature():
++    try:
++        risky()
++    except Exception:
++        # TODO: handle failure
++        return {}
