@@ -571,6 +571,25 @@ The current focus is on implementing and demonstrating the core review workflow 
 ## Project Goal
 
 > **Find the ghosts in AI-generated code before they reach production.**
+Module 1 — AI Code Review Auditor
+
+Your existing Ghost-Hunter functionality:
+
+Dependency/API Hallucination
+Blueprint/Architecture violations
+Ghost paths & swallowed exceptions
+Duplicate/internal code detection
+Evidence-based review report
+Module 2 — AI Pentest Reliability Auditor
+
+The new Idea A:
+
+Coverage Auditor — Did the scanner actually perform the planned tests?
+Failure Auditor — Which tool calls/tests failed?
+Evidence Auditor — Is there enough evidence to support the reported result?
+Consistency Auditor — Do repeated runs on the same controlled application produce materially different results?
+Recovery Agent — Investigates missing/failed checks and retries within defined limits.
+Reliability Report — Shows what was verified versus what remains unverified.
 
 GitHub Repository:
 
