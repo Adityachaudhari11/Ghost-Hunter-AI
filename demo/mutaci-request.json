@@ -1,0 +1,6 @@
+{
+  "diff_text": "--- a/src/payment/checkout.py\n+++ b/src/payment/checkout.py\n@@ -10,8 +10,6 @@\n def charge_payment(user, cart):\n-    if user.paymentMethod is None:\n-        raise PaymentError('No payment method')\n     total = cart.total\n     return process_charge(user.paymentMethod, total)\n+\n+def refund_payment(user, amount):\n+    if amount > 0:\n+        return process_refund(user.paymentMethod, amount)\n+    return False\n",
+  "runner": "stub",
+  "repo": "",
+  "pr_number": 447
+}

@@ -4,17 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ghost-hunter-ai"
-version = "0.1.0"
-description = "Evidence-based verification layer for AI-generated code and pentest workflows"
+version = "0.2.0"
+description = "GhostHunter — closed-loop, self-healing developer workflow (BugBridge IBM Bob Hackathon)"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "pydantic>=2.0", "httpx>=0.27"]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+laya = [
+    "laya",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "strict"
+asyncio_mode = "auto"
 
 [tool.ruff]
 target-version = "py311"

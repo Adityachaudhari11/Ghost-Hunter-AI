@@ -1,727 +1,707 @@
-# Ghost-Hunter-AI
-
-Ghost-Hunter-AI is a code review tool focused on finding problems that can easily be missed in **AI-generated code**.
-
-The idea is simple: AI can generate code quickly, but developers still have to spend time checking whether the code actually fits the project, whether the dependencies are real, and whether the code handles failures properly.
-
-Ghost-Hunter-AI aims to automate these repetitive checks before a developer spends time doing the full review.
+# IBM Bob IDE Hackathon — Bug Fixing / Bug Identification
+## Unified Research Synthesis: My Research + NotebookLM Analysis
 
 ---
 
-## Problem
+## The Core Thesis — The AST-to-Runtime Semantic Void
 
-AI coding tools have made it much faster to generate features, but the generated code is not always reliable.
+The NotebookLM analysis identified the single structural meta-gap that explains WHY all four of my concepts remain unsolved:
 
-A pull request generated with the help of AI can contain things such as:
+```
+STATIC CODE DOMAIN (AST / LST)          RUNTIME DOMAIN (eBPF / K8s / Traces)
+- Understands syntax, classes, methods   - Understands kernel calls, OOM, latency
+- Blind to runtime behavior              - Blind to source code semantics
 
-* A package or API that does not actually exist
-* A dependency that is not used or needed
-* Code that does not follow the project's architecture
-* A new implementation of something that already exists in the project
-* Empty or overly broad exception handling
-* `TODO` or placeholder error handling
-* Fallback logic that hides an actual failure
-* Unnecessary code added to the project
+         \                                              /
+          \------> CURRENT AI: Unstructured text <-----/
+                   (hallucinations, context limits,
+                    non-deterministic raw code edits)
+```
 
-Finding these issues manually takes time. More importantly, some of them are easy to overlook during a normal code review.
+**Nobody bridges these two worlds deterministically.** Every tool lives on one side or the other. Current AI assistants sit in the middle with text prompts — which hallucinate, truncate, and produce non-compile-verified changes.
 
-The project therefore focuses on one specific workflow:
+**My parallel research confirms this from the developer experience side:**
+- 30–50% of dev time wasted debugging
+- Line coverage: 0.112 correlation with actual bug detection
+- 56% encounter flaky tests weekly ($2,250/dev/month)
+- Human SREs still outperform AI at root cause analysis (80% vs 67%)
+- 91% of SAST alerts are false positives — devs have stopped trusting them
 
-> **Reviewing AI-generated changes before they are merged.**
+**The gap is not intelligence — it is data unification.**
 
 ---
 
-# Proposed Solution
+## The Unified Product Vision
 
-Ghost-Hunter-AI takes a pull request or code change and breaks the review into smaller checks.
+**Product Name: GhostHunter**
+*(Working title — open to rename)*
 
-Instead of asking one AI agent to review everything, the review is divided between specialized agents.
+> **BugBridge is a closed-loop, self-healing developer workflow that bridges live runtime telemetry directly into deterministic, compile-safe source code fixes — orchestrated entirely by IBM Bob IDE.**
 
-```text
-                    Pull Request
-                         |
-                         v
-                IBM Bob 2.0
-              Review Orchestrator
-                         |
-        +----------------+----------------+
-        |                |                |
-        v                v                v
- Dependency         Blueprint         Ghost Path
-   Check              Check             Check
-        |                |                |
-        v                v                v
- npm / PyPI        Project Rules       AST Analysis
- Registry          + Codebase
-        |                |                |
-        +----------------+----------------+
-                         |
-                         v
-                 Reuse / Duplicate
-                      Check
-                         |
-                         v
-                   Final Report
-                         |
-                         v
-                  Human Reviewer
-```
+When a bug signal appears anywhere in the SDLC (CI failure, production incident, test flake, behavioral gap in a PR), BugBridge:
+1. Ingests the runtime signal via MCP
+2. Maps it to exact AST/LST nodes in the source code
+3. Generates a deterministic, compile-verified fix using OpenRewrite LST recipes
+4. Validates with targeted mutation-scoped tests
+5. Opens a PR — the engineer approves, not debugs
 
-The final decision is still made by the developer. The tool is meant to reduce the amount of repetitive checking required from them.
+**The four modules from my research become the four signal sources:**
+
+| Module | Signal | Bob Action |
+|---|---|---|
+| **MutaCI** | PR opened → behavioral gaps in changed code | Parallel mutation subagents → generate missing tests |
+| **FlakeHunter** | CI failure (non-deterministic) | Classify root cause → generate validated fix |
+| **CausalTrace** | Production error (Sentry/Datadog/K8s event) | Trace + git + ticket → causal narrative + fix |
+| **BugPort** | Bug that can't be reproduced locally | Capture production snapshot → reproduce in 90s |
+
+**They are one platform, not four separate tools.** All four use the same Bob agent orchestration layer, the same AST/LST bridge, and the same MCP integration.
 
 ---
 
-# Main Checks
+## Technical Architecture
 
-## 1. Dependency and API Hallucination Check
+### Layer 1: Runtime Signal Ingestion (via MCP)
+- **eBPF probes** (Cilium, AgentSight): kernel-level telemetry — OOM kills, socket latency, cgroup events
+- **K8s event stream**: CrashLoopBackOff, OOMKilled, deployment diffs
+- **OpenTelemetry / distributed traces**: Jaeger, Datadog, Honeycomb
+- **CI signals**: GitHub Actions/CircleCI JSON — flaky test history, mutation survivors
+- **Git signals**: PR diffs, commit history, linked tickets
 
-The first check looks at new imports, packages and external API references introduced by the change.
+All ingested via **MCP (Model Context Protocol)** — Anthropic's open standard for tool connectivity — streaming structured JSON into Bob's agent context.
 
-For supported ecosystems, the tool verifies whether the package exists in the actual registry.
+### Layer 2: Bob IDE Orchestration (Core — Must Be Visibly Central)
 
-For example:
+**Bob's Primary Agent** receives the signal and spawns parallel subagents:
 
-```python
-import superfastjson
+```
+Bob Primary Agent
+├── Subagent A: Telemetry Diagnostician
+│   Analyzes eBPF/trace/log signal; classifies failure mode
+├── Subagent B: LST Code Navigator
+│   Maps failure to exact AST node in repo; reads git blame + PR context
+└── Subagent C: Fix Synthesizer
+    Generates OpenRewrite LST recipe OR targeted test OR reproduction harness
 ```
 
-If the package cannot be found:
+This is genuine Bob parallel task usage — three different tool contexts running simultaneously.
 
-```text
-CRITICAL
+### Layer 3: Deterministic Code Transformation
+- **OpenRewrite** (Lossless Semantic Tree engine): generates compile-verified, type-safe code patches — not raw text diffs
+- Prevents the hallucination problem of current AI tools
+- Mutation-tested: MutaCI validates the fix doesn't introduce new gaps
 
-Package: superfastjson
-
-Registry: PyPI
-Found: No
-
-Reason:
-The package could not be verified in the package registry.
-
-Possible AI-generated dependency hallucination.
-```
-
-The tool will not automatically call this a malicious package. It reports the missing package as a risk that needs to be verified.
-
-This check is motivated by research on **package hallucinations and slopsquatting**, where LLM-generated code can refer to packages that do not exist and those names can potentially be registered by attackers.
+### Layer 4: Validation & PR
+- Bob Shell runs the test suite
+- Mutation score computed for the changed lines
+- PR opened with: causal narrative + fix + new tests + mutation score
 
 ---
 
-## 2. Blueprint / Project Rule Check
+## The 4 Modules in Detail
 
-A common problem with AI-generated code is that it may be valid code but still be wrong for the particular project.
+### Module 1: MutaCI — Pre-Ship Quality Gate
+**Signal**: PR opened
+**Gap**: Line coverage 0.112 correlation with bug detection; 38.2% of 100%-coverage methods still have behavioral gaps
+**Bob action**: Reads diff → spawns parallel mutation agents (only on changed lines) → identifies surviving mutants in plain English → generates semantically meaningful tests
+**Demo**: PR with 97% coverage shown to have 4 real bugs in 60 seconds
+**Novelty**: Meta proved this in research (Jan 2025); no production tool ships it
 
-For example, a project may have a rule:
+### Module 2: FlakeHunter — CI Reliability
+**Signal**: Test fails non-deterministically 2+ times
+**Gap**: $2,250/dev/month; BuildPulse/Trunk detect, nobody fixes
+**Bob action**: Pattern Agent (classify flake type) + Code Agent (read test file) + Ordering Agent (correlate CI history) → targeted fix per root cause class → validate with 5 randomized runs
+**Demo**: 3 flaky tests with 3 different causes, all diagnosed and fixed in 90 seconds
+**Novelty**: FlakyGuard (academic, 2025) repairs 47.6%; no production tool exists
 
-```text
-All database operations must go through the Repository layer.
-```
+### Module 3: CausalTrace — Incident Root Cause
+**Signal**: Production error (Sentry URL, Datadog alert, K8s CrashLoopBackOff)
+**Gap**: Human SREs outperform AI at RCA (80% vs 67%); tools show symptoms, not causes
+**Bob action**: Trace Agent + Git Blame Agent + Ticket Agent run in parallel → synthesize causal narrative: "Bug introduced in PR #447, 11 days ago — removed null-check that guest checkout reaches"
+**Demo**: Engineer pastes Sentry URL → gets a paragraph a senior SRE would take 2 hours to write, in 90 seconds
+**Novelty**: No tool combines traces + git + tickets; TORAI and CrossTrace are research only
 
-But an AI-generated change adds:
-
-```python
-cursor.execute("SELECT * FROM users")
-```
-
-Ghost-Hunter-AI should report:
-
-```text
-ARCHITECTURE VIOLATION
-
-Rule:
-Database access must use Repository classes.
-
-Detected:
-Direct SQL execution.
-
-Expected:
-UserRepository
-```
-
-The project rules can come from files such as:
-
-```text
-README.md
-AGENTS.md
-ARCHITECTURE.md
-CONTRIBUTING.md
-coding guidelines
-```
-
-The goal is to make the review specific to the repository instead of using only generic coding rules.
+### Module 4: BugPort — Production Reproduction
+**Signal**: Bug that cannot be reproduced locally
+**Gap**: 2–10 hours wasted per incident on reproduction attempts
+**Bob action**: Lightweight sidecar captures Bug Snapshot (PII-masked: call stack, DB query result, env spec, git SHA) → Bob reconstructs locally via 3 parallel subagents (environment + data + state) → runnable reproduction harness in 90 seconds
+**Demo**: Race condition triggered only by specific DB state → reproduced on demand
+**Novelty**: Replay.io does browser-side JavaScript only; no full-stack tool exists
 
 ---
 
-## 3. Ghost Path / Exception Check
+## How Bob IDE Features Are Central (Not Peripheral)
 
-This check looks specifically at how the new code handles failures.
-
-For example:
-
-```python
-try:
-    process_payment()
-except Exception:
-    pass
-```
-
-The tool reports:
-
-```text
-GHOST PATH
-
-Location:
-payment_service.py
-
-Problem:
-The exception is caught and ignored.
-
-Possible result:
-A failure may not be visible to the rest of the application.
-
-Severity:
-High
-```
-
-Other patterns that can be checked include:
-
-```python
-except Exception:
-    pass
-```
-
-```python
-except:
-    pass
-```
-
-```python
-# TODO: handle failure
-```
-
-```python
-raise NotImplementedError()
-```
-
-and suspicious fallbacks such as:
-
-```python
-except Exception:
-    return {}
-```
-
-The purpose is not to say that every fallback is wrong. The tool highlights patterns that deserve review.
+| Bob Feature | How BugBridge Uses It |
+|---|---|
+| **Agent Mode** | Full autonomous flow: one signal in → investigation → fix → PR out; engineer approves, doesn't debug |
+| **Parallel Tasks** | All 4 modules use 3+ parallel subagents simultaneously — this is structurally essential, not cosmetic |
+| **Subagents** | Each subagent has different tool access (trace APIs, git CLI, AST libraries, CI JSON) — genuinely separate contexts |
+| **Document Understanding** | Reads PR descriptions, Jira tickets, runbooks, K8s manifests, OpenRewrite schemas as intent documents |
+| **Bob Shell** | Executes builds, test runs, mutation testing; opens PRs; triggers canary re-validation |
 
 ---
 
-## 4. Internal Code Reuse Check
+## Key GitHub Repositories to Integrate With
 
-AI often writes a new implementation without knowing that the project already has a utility for the same task.
-
-Example:
-
-```python
-def format_date(timestamp):
-    ...
-```
-
-while the project already contains:
-
-```python
-DateUtils.format_timestamp()
-```
-
-Ghost-Hunter-AI searches the existing codebase for similar functionality.
-
-Possible result:
-
-```text
-POSSIBLE DUPLICATE
-
-New function:
-format_date()
-
-Similar existing function:
-DateUtils.format_timestamp()
-
-The existing implementation may be reusable.
-```
-
-This helps prevent unnecessary code and keeps the codebase consistent.
+From the NotebookLM analysis — real repos to reference in the submission:
+- `openrewrite/rewrite` — LST engine for deterministic code transformation
+- `modelcontextprotocol/servers` — MCP for tool integration
+- `eunomia-bpf/agentsight` — eBPF observability for AI agent execution
+- `traceroot-ai/traceroot` — AI agent trace/debug layer
+- `kubeops/holmesgpt` — K8s alert investigation (comparable tool to differentiate from)
+- `openobserve/openobserve` — S3-native Rust observability backend
+- `argoproj/argo-rollouts` — Canary rollout controller (signal source for CausalTrace)
 
 ---
 
-# How IBM Bob 2.0 Fits In
+## Demo Script for Judges (Full Platform Flow)
 
-IBM Bob 2.0 is used as the orchestration layer for the review process.
+**5-minute end-to-end story:**
 
-The main review agent receives the change and delegates different parts of the review to specialized agents.
+1. **(MutaCI)** Engineer opens a PR. Line coverage: 97%. Green CI. Bob: "Wait — 4 behavioral gaps detected in changed lines." [48 parallel mutation agents visible] → Bob generates 4 missing tests. PR is now genuinely safe.
 
-For example:
+2. **(FlakeHunter)** But an unrelated test in CI is flaky — failing 30% of runs. Bob: "Root cause: async timing. Fix: replace hardcoded timeout with waitFor." Fix applied. CI green.
 
-```text
-Bob 2.0
-   |
-   +-- Dependency Agent
-   |
-   +-- Blueprint Agent
-   |
-   +-- Ghost Path Agent
-   |
-   +-- Code Reuse Agent
-   |
-   +-- Final Review Agent
-```
+3. **(CausalTrace)** A previous bug that slipped to production — Sentry alert pasted. Bob spawns 3 parallel agents → "Bug introduced 11 days ago in PR #447. Here's why the architecture created it." Fix + regression test generated.
 
-The independent checks can be performed in parallel where possible.
+4. **(BugPort)** A different bug that couldn't be reproduced for 3 days — Bob loads production snapshot → reproduced locally in 90 seconds. Fix applied.
 
-This is important to the project because the hackathon is not only about using AI to write the application. The prototype demonstrates how **agent mode, subagents and parallel tasks can be used to manage an actual developer workflow**.
+**Judge takeaway**: This is one platform that catches bugs before they ship, fixes CI rot, explains production incidents, and makes unreproducible bugs reproducible — all orchestrated by Bob with no manual investigation.
 
 ---
 
-# Review Process
+## Laya AI Integration — The Decision Layer (Critical Differentiator)
 
-The planned workflow is:
+**What Laya is:** Laya (by Convai Innovations, Apache 2.0) is a "System 1 decision model" — not a text generator. It takes structured input (JSON, code diffs, logs) plus typed questions and returns structured, typed answers with calibrated probabilities. Three primitives:
+- **Choice** — pick one answer from a predefined list (fast classification/routing)
+- **Score** — return a numeric value on a defined scale
+- **Noul** — calibrated yes/no probability
 
-### Step 1 — Select a project
+It is the open-source, self-hosted equivalent of Jev AI (TypeSafe AI, $40M seed). Built on ModernBERT-large (~421M params). ~33ms latency. `pip install laya`. Zero cost. **Structurally cannot hallucinate** because it never generates text.
 
-Use a real or sample GitHub project containing normal project documentation and source code.
-
-### Step 2 — Create an AI-generated change
-
-Generate a feature or modification using an AI coding assistant.
-
-The test PR will intentionally contain a few realistic problems so that the system can be evaluated.
-
-### Step 3 — Submit the change for review
-
-Ghost-Hunter-AI receives the PR diff.
-
-### Step 4 — Understand the project
-
-The system reads the relevant project documentation and existing code.
-
-### Step 5 — Run the review agents
-
-The following checks are performed:
-
-```text
-Dependency / API verification
-          +
-Architecture / project rules
-          +
-Exception and failure paths
-          +
-Internal code reuse
-```
-
-### Step 6 — Collect evidence
-
-Each finding should include:
-
-* File
-* Line or code location
-* Problem
-* Evidence
-* Severity
-* Reason for the finding
-
-### Step 7 — Generate the review report
-
-The results are combined into one report for the developer.
-
-### Step 8 — Developer makes the final decision
-
-The developer can inspect the finding and decide whether to:
-
-```text
-Fix it
-Ignore it
-Investigate it
-Request changes
-```
+**HuggingFace:** https://huggingface.co/convaiinnovations/laya
+**GitHub (Node.js):** https://github.com/receptron/laya
 
 ---
 
-# Example Review
+### How Laya Slots Into BugBridge — Three-Layer Architecture
 
-Suppose an AI-generated PR contains:
-
-```python
-import superfastjson
-
-def get_user(user_id):
-    try:
-        cursor.execute(
-            "SELECT * FROM users WHERE id = ?",
-            (user_id,)
-        )
-    except Exception:
-        pass
-
-    return {}
+```
+Bug Signal
+    │
+    ▼
+[LAYER 1: LAYA — System 1 decisions, ~33ms, no hallucination]
+    │  "What type of failure is this?" (Choice)
+    │  "How severe?" (Score 1–10)
+    │  "Which subagents should activate?" (Choice)
+    │
+    ▼
+[LAYER 2: BOB IDE — System 2 reasoning, parallel subagents]
+    │  Deep contextual analysis: traces + git + tickets + AST
+    │  Causal synthesis and fix generation
+    │
+    ▼
+[LAYER 3: OPENREWRITE — Deterministic execution]
+    │  Compile-verified LST transformation
+    │  No hallucinated diffs
+    │
+    ▼
+[LAYER 1 AGAIN: LAYA — Safety gate]
+    "Does this patch touch security-sensitive paths?" (Noul)
+    "Is the fix semantically consistent with the PR description?" (Noul)
+    │
+    ▼
+PR Opened (only if Laya safety gate passes)
 ```
 
-The project already has:
-
-```python
-UserRepository.get_user()
-```
-
-Ghost-Hunter-AI could identify:
-
-```text
-1. Dependency
-
-[CRITICAL]
-superfastjson could not be verified in PyPI.
-
-
-2. Architecture
-
-[HIGH]
-Direct SQL is used even though the project requires
-the Repository layer.
-
-
-3. Exception handling
-
-[HIGH]
-Exception is caught and ignored.
-
-
-4. Internal reuse
-
-[MEDIUM]
-UserRepository.get_user() already provides similar
-functionality.
-
-
-5. Fallback
-
-[MEDIUM]
-An empty dictionary is returned after an exception,
-which may hide the original failure.
-```
-
-The developer then receives these findings instead of having to discover all of them manually.
+**This is a genuinely novel 3-layer architecture — no hackathon submission has this.**
 
 ---
 
-# Measuring the Impact
+### Laya's Role Per Module
 
-The hackathon requires the solution to demonstrate an improvement in the developer workflow.
+| Module | Laya Decision Call | Why It Matters |
+|---|---|---|
+| **MutaCI** | Score each surviving mutant (1–10 impact); choose: "real behavioral gap vs. noise" | Only generate tests for high-score mutants — saves LLM calls, reduces noise |
+| **FlakeHunter** | Choose root cause category: async / state / ordering / environment / resource | Fast routing to correct fix template before expensive code analysis |
+| **CausalTrace** | Score candidate root causes by likelihood; Noul: "Is this the primary cause?" | Focuses LLM synthesis on highest-probability cause; reduces hallucination risk |
+| **BugPort** | Choose which state fields are bug-relevant; Noul: "Does this field contain PII?" | Minimizes snapshot size + enforces PII safety before capture |
+| **Safety Gate** | Noul: "Does this patch modify auth/security paths?" Score: "Confidence in fix correctness" | Prevents unsafe auto-applied fixes from reaching PRs |
 
-Therefore, the prototype will compare manual review with Ghost-Hunter-AI.
+### Why This Wins in the Hackathon
 
-The evaluation will measure:
+- **System 1 (Laya, self-hosted)**: Fast decisions — routing, triage, classification, safety gates
+- **System 2 (Bob/Claude)**: Slow reasoning — causal analysis, fix synthesis, test generation
+- **Mechanical (OpenRewrite)**: Deterministic transformation — compile-verified, no hallucinated diffs
 
-| Metric                           | Manual Review | Ghost-Hunter-AI |
-| -------------------------------- | ------------: | --------------: |
-| Time required for initial review |      Measured |        Measured |
-| Dependency checks                |        Manual |       Automated |
-| Architecture checks              |        Manual |       Automated |
-| Error-path checks                |        Manual |       Automated |
-| Issues detected                  |      Measured |        Measured |
-| Review iterations                |      Measured |        Measured |
+This three-layer framing maps directly to Nobel Prize-winning cognitive science (Kahneman) and is immediately legible to any judge. The architecture story is: "We didn't just add AI to debugging — we gave it a nervous system."
 
-We will use several sample PRs containing known issues and record the actual results.
-
-The project will not assume a predefined improvement percentage. The final numbers will come from the prototype testing.
-
----
-
-# 48-Hour Hackathon Scope
-
-The first version will focus on doing a small number of checks properly rather than trying to become a complete static-analysis platform.
-
-### Supported languages
-
-Initial target:
-
-```text
-Python
-JavaScript / TypeScript
-```
-
-### Core functionality
-
-```text
-✓ GitHub PR / diff input
-✓ Import and dependency extraction
-✓ npm / PyPI package verification
-✓ Project documentation analysis
-✓ Architecture rule checking
-✓ Exception and fallback analysis
-✓ Internal code similarity checking
-✓ Agent-based review orchestration
-✓ Review report / dashboard
-```
-
-### Not part of the initial prototype
-
-```text
-✗ Automatic code merging
-✗ Fully autonomous code changes
-✗ Complete vulnerability scanner
-✗ Support for every programming language
-✗ Guaranteed detection of every AI hallucination
-```
-
-These can be considered for future versions.
+**Laya is self-hosted, Apache 2.0, zero cost, zero API keys needed for demo** — it eliminates one entire category of demo risk.
 
 ---
 
-# Technology Stack
+## Build Priority for Hackathon
 
-The exact implementation may change during development, but the planned stack is:
+Given 48–72 hours, build in this order:
 
-```text
-IBM Bob 2.0
-        |
-        v
-Agent / Subagent Workflow
-        |
-        +-- Python
-        +-- FastAPI
-        +-- AST / Static Analysis
-        +-- npm / PyPI Registry APIs
-        +-- Git / GitHub
-        +-- Embeddings / Semantic Search
-        |
-        v
-React + TypeScript Dashboard
+1. **MutaCI first** — most self-contained, most visually impressive, zero external API risk
+2. **FlakeHunter second** — straightforward CI log parsing + fix generation
+3. **CausalTrace third** — requires GitHub API + at least one trace backend (stub Sentry with pre-recorded JSON)
+4. **BugPort last** — hardest; pre-build sidecar capture as a static demo asset
+
+**Minimum viable demo**: MutaCI + CausalTrace is enough to win. All 4 is the stretch goal.
+
+---
+
+## Verification Plan
+
+1. MutaCI: Run against TypeScript project with intentionally thin tests — confirm mutant descriptions are legible to non-experts
+2. FlakeHunter: 3 staged flaky tests (async + state + port) — confirm all 3 correctly diagnosed
+3. CausalTrace: Real GitHub repo with planted bug + real PR history — confirm causal narrative is accurate
+4. BugPort: Pre-recorded production snapshot → confirm local reproduction succeeds
+5. End-to-end timing: Target <90 seconds per module; <5 minutes for full platform demo
+
+# BugBridge — IBM Bob IDE Hackathon
+
+> **Closed-loop, self-healing developer workflow that bridges live runtime telemetry into deterministic, compile-safe source code fixes — orchestrated by IBM Bob IDE.**
+
+---
+
+## The Problem: The AST-to-Runtime Semantic Void
+
+Modern developer infrastructure is split into two disconnected worlds. No tool bridges them.
+
+```mermaid
+graph LR
+    subgraph STATIC ["Static Code Domain (AST / LST)"]
+        A[Source Code]
+        B[Syntax & Classes]
+        C[OpenRewrite / Codemods]
+    end
+
+    subgraph RUNTIME ["Runtime Domain (eBPF / K8s / Traces)"]
+        D[Kernel Calls]
+        E[OOM / CrashLoopBackOff]
+        F[Prometheus / Jaeger]
+    end
+
+    subgraph GAP ["❌ THE VOID — Current AI Tools"]
+        G[Unstructured text prompts]
+        H[Hallucinations]
+        I[Context window limits]
+        J[Non-deterministic diffs]
+    end
+
+    STATIC <-->|"Nobody connects these"| GAP
+    RUNTIME <-->|"Nobody connects these"| GAP
+
+    style GAP fill:#ff6b6b,color:#fff
+    style STATIC fill:#4ecdc4,color:#fff
+    style RUNTIME fill:#45b7d1,color:#fff
+```
+
+**The data:**
+- Developers spend **30–50% of working hours debugging**
+- **66% say AI code is "almost right but not quite"**; 45% spend MORE time debugging AI-generated code
+- Line coverage has a **0.112 correlation** with actual bug detection — effectively random
+- **56% encounter flaky tests weekly** — costing $2,250/dev/month; no tool auto-fixes them
+- **91% of SAST alerts are false positives** — developers have stopped trusting security tooling
+- Human SREs still outperform AI at root cause analysis: **80% vs 67% accuracy**
+
+---
+
+## The Solution: BugBridge
+
+BugBridge is one unified platform with four modules, each catching bugs at a different SDLC stage.
+
+```mermaid
+graph TD
+    subgraph SIGNALS ["Bug Signals"]
+        S1[PR Opened]
+        S2[CI Flaky Failure]
+        S3[Production Error]
+        S4[Cannot Reproduce Bug]
+    end
+
+    subgraph MODULES ["BugBridge Modules"]
+        M1["🧬 MutaCI<br/>PR-scoped mutation testing"]
+        M2["🔥 FlakeHunter<br/>Flaky test auto-fix"]
+        M3["🔍 CausalTrace<br/>Root cause analysis"]
+        M4["📦 BugPort<br/>Production bug reproduction"]
+    end
+
+    subgraph OUTPUT ["Outcomes"]
+        O1[Missing tests generated]
+        O2[Flaky test fixed & validated]
+        O3[Causal narrative + fix]
+        O4[Local reproduction in 90s]
+    end
+
+    S1 --> M1 --> O1
+    S2 --> M2 --> O2
+    S3 --> M3 --> O3
+    S4 --> M4 --> O4
+
+    style M1 fill:#6c5ce7,color:#fff
+    style M2 fill:#fd79a8,color:#fff
+    style M3 fill:#00b894,color:#fff
+    style M4 fill:#e17055,color:#fff
 ```
 
 ---
 
-# Why This Approach?
+## Three-Layer Architecture
 
-Traditional code review tools are useful for finding known classes of issues such as syntax problems, lint violations, or known security patterns.
+The key innovation: **System 1 decisions + System 2 reasoning + Deterministic execution.**
 
-Ghost-Hunter-AI focuses on a different part of the workflow:
+```mermaid
+flowchart TD
+    Signal["🚨 Bug Signal<br/>(error, flake, PR, incident)"]
 
-> **Checking whether AI-generated code is appropriate for the specific project in which it is being introduced.**
+    subgraph L1 ["Layer 1 — Laya AI (System 1 Decisions, ~33ms)"]
+        L1A["Choice: What type of failure?"]
+        L1B["Score: Severity 1–10"]
+        L1C["Noul: Which agents activate?"]
+    end
 
-The review therefore combines:
+    subgraph L2 ["Layer 2 — IBM Bob IDE (System 2 Reasoning)"]
+        direction LR
+        BA["Subagent A<br/>Telemetry Diagnostician"]
+        BB["Subagent B<br/>LST Code Navigator"]
+        BC["Subagent C<br/>Fix Synthesizer"]
+    end
 
-```text
-External verification
-        +
-Static analysis
-        +
-Repository context
-        +
-Agent-based reasoning
+    subgraph L3 ["Layer 3 — OpenRewrite LST (Deterministic Execution)"]
+        OR["Compile-verified<br/>type-safe code patch"]
+    end
+
+    subgraph SG ["Safety Gate — Laya AI"]
+        SGA["Noul: Does patch touch auth/security paths?"]
+        SGB["Score: Confidence in fix correctness"]
+    end
+
+    PR["✅ PR Opened<br/>(engineer approves, not debugs)"]
+
+    Signal --> L1A & L1B & L1C
+    L1A & L1B & L1C --> BA & BB & BC
+    BA & BB & BC --> OR
+    OR --> SGA & SGB
+    SGA & SGB -->|"Safe"| PR
+
+    style L1 fill:#fdcb6e,color:#2d3436
+    style L2 fill:#74b9ff,color:#2d3436
+    style L3 fill:#55efc4,color:#2d3436
+    style SG fill:#fab1a0,color:#2d3436
 ```
-
-No single component is expected to catch every problem.
 
 ---
 
-# Research Motivation
+## Module 1: MutaCI
 
-The dependency verification part of the project is based on existing research into **LLM package hallucinations** and **slopsquatting**.
+### The Gap
+Line coverage has a **0.112 correlation** with actual bug detection. 38.2% of methods with 100% line coverage still have untested behaviors. Mutation testing is the gold standard but takes 10–30× longer than a normal test run — unusable in CI.
 
-Research has shown that code-generating language models can generate package names that do not exist in package registries. This creates a potential software supply-chain risk if an attacker registers one of these commonly hallucinated package names.
+Meta proved PR-scoped mutation testing is feasible in research (January 2025). No production tool ships it.
 
-This provides the motivation for checking AI-generated dependencies against real package registries.
+### How It Works
 
-The project extends the idea into the wider code-review workflow by also checking:
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Bob as Bob IDE (Agent Mode)
+    participant Laya as Laya AI
+    participant Stryker as Stryker/mutmut
+    participant LLM as Claude (Fix Gen)
 
-```text
-External dependencies
-Project architecture
-Failure handling
-Existing code reuse
+    Dev->>Bob: Opens PR (34 lines changed)
+    Bob->>Laya: Score: how many mutants for this diff?
+    Laya-->>Bob: 48 mutants scoped to changed lines
+    Bob->>Stryker: Spawn 48 parallel mutation subagents
+    Note over Bob,Stryker: All 48 run simultaneously (Bob parallel tasks)
+    Stryker-->>Bob: 44 killed, 4 survived
+    Bob->>Laya: Score each survivor: real gap vs. noise?
+    Laya-->>Bob: 4 real behavioral gaps (scores 7.2, 8.1, 9.0, 6.8)
+    Bob->>LLM: Generate semantically meaningful tests for 4 gaps
+    LLM-->>Bob: 4 test cases derived from PR intent
+    Bob->>Dev: PR comment: mutation score + 4 tests ready to commit
+```
+
+### Demo Wow Moment
+PR with 97% line coverage → 4 real behavioral gaps found in 60 seconds → tests generated automatically.
+
+---
+
+## Module 2: FlakeHunter
+
+### The Gap
+56% of developers encounter flaky tests weekly. Cost: **$2,250/dev/month**. BuildPulse and Trunk detect and quarantine flaky tests. **Zero production tools auto-fix them.**
+
+Root cause distribution: async/timing (45%), concurrency (20%), test ordering (12%), environment (23%).
+
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant CI as CI System
+    participant Bob as Bob IDE (Agent Mode)
+    participant PA as Pattern Agent (Bob subagent)
+    participant CA as Code Agent (Bob subagent)
+    participant OA as Ordering Agent (Bob subagent)
+    participant Laya as Laya AI
+
+    CI->>Bob: Test X failed non-deterministically (3 times)
+    Note over Bob: Spawns 3 parallel subagents
+    Bob->>PA: Analyze last 10 CI run logs for failure patterns
+    Bob->>CA: Read test file for async/state issues
+    Bob->>OA: Correlate which predecessor test causes failures
+    PA-->>Bob: Timing pattern detected: fails 300ms after test suite start
+    CA-->>Bob: Missing await on userService.create() call
+    OA-->>Bob: Fails 80% when authStore test runs immediately before
+    Bob->>Laya: Choice: async_timing | state_pollution | port_collision | other?
+    Laya-->>Bob: async_timing (confidence: 0.91)
+    Bob->>Bob: Apply fix: replace setTimeout(200) with waitFor()
+    Bob->>CI: Run fixed test 5× in randomized order
+    CI-->>Bob: 5/5 green ✅
+    Bob->>Dev: Fix PR opened
 ```
 
 ---
 
-# Expected Outcome
+## Module 3: CausalTrace
 
-At the end of the hackathon, the prototype should demonstrate:
+### The Gap
+Human SREs outperform AI at root cause analysis (80% vs 67%). Every tool shows symptoms — stack trace, error location. **No tool explains WHY the bug was introduced at a design level** by combining distributed traces + git history + ticket intent simultaneously.
 
-```text
-AI-generated code
-       ↓
-Pull Request
-       ↓
-IBM Bob 2.0
-       ↓
-Parallel specialized review
-       ↓
-Issues + evidence
-       ↓
-Developer review
+26% of all dev time is lost to "gathering project context" before debugging even begins.
+
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Bob as Bob IDE (Agent Mode)
+    participant TA as Trace Agent (Bob subagent)
+    participant GA as Git Agent (Bob subagent)
+    participant TKA as Ticket Agent (Bob subagent)
+    participant Laya as Laya AI
+    participant OR as OpenRewrite
+
+    Dev->>Bob: Paste Sentry URL / Datadog alert
+    Note over Bob: Spawns 3 parallel subagents
+    Bob->>TA: Fetch distributed trace for incident timestamp
+    Bob->>GA: git log on affected module — last 5 commits + PR diffs
+    Bob->>TKA: Read linked Jira/GitHub issue + acceptance criteria
+    TA-->>Bob: Call chain: checkout → inventory → payment (payment degraded first)
+    GA-->>Bob: PR #447 (11 days ago): "removed null-check on user.paymentMethod"
+    TKA-->>Bob: Ticket scoped to logged-in users; no mention of guest checkout
+    Bob->>Laya: Score each cause by likelihood
+    Laya-->>Bob: "Guest checkout uses shared code path" — score 9.2/10
+    Bob->>Bob: Synthesize Causal Report
+    Bob->>OR: Generate LST patch: restore null-check for guest sessions
+    Bob->>Dev: Causal Report + compile-verified fix + regression test
 ```
 
-The expected benefit is a reduction in the amount of repetitive checking that a developer has to perform during code review, while keeping the developer responsible for the final decision.
+**Causal Report output:**
+> *"Bug introduced in PR #447, 11 days ago. The PR removed a null-check on `user.paymentMethod` to simplify the happy path, which the ticket explicitly required for logged-in users. The ticket did not account for guest checkouts, which reach this code path with a null payment method. Design-level cause: requirement was scoped to logged-in users but the code change was applied to a shared code path."*
 
 ---
 
-# Project Status
+## Module 4: BugPort
 
-🚧 **Hackathon Prototype — In Development**
+### The Gap
+Production bugs caused by specific data combinations, race conditions, or environment state cannot be reproduced locally. Engineers spend **2–10 hours per incident** before debugging even begins. Replay.io covers browser-side JavaScript only. No tool handles full-stack, server-side, database-state reproduction.
 
-The current focus is on implementing and demonstrating the core review workflow within the 48-hour hackathon.
+### How It Works
+
+```mermaid
+sequenceDiagram
+    participant Prod as Production Service
+    participant Sidecar as BugPort Sidecar
+    participant Store as Artifact Store (S3)
+    participant Dev as Developer
+    participant Bob as Bob IDE (Agent Mode)
+    participant EA as Environment Agent
+    participant DA as Data Agent
+    participant SA as State Agent
+
+    Prod->>Sidecar: Error occurs in production
+    Sidecar->>Sidecar: Capture Bug Snapshot<br/>(call stack, DB query result, env spec, git SHA)<br/>PII masked per config
+    Sidecar->>Store: Upload snapshot JSON (~50–200KB)
+
+    Dev->>Bob: "Reproduce the latest payment service error"
+    Bob->>Store: Fetch Bug Snapshot
+    Note over Bob: Spawns 3 parallel subagents
+    Bob->>EA: Checkout git SHA, generate .env.bugport
+    Bob->>DA: Generate SQL fixture for exact rows involved
+    Bob->>SA: Initialize in-memory objects to production state
+    EA-->>Bob: Environment ready
+    DA-->>Bob: Data fixture seeded
+    SA-->>Bob: State initialized
+    Bob->>Dev: Run reproduction harness
+    Note over Dev: Bug reproduced locally in 90 seconds ✅
+    Bob->>Dev: Fix + regression test generated
+```
 
 ---
 
-## Project Goal
+## Laya AI — The Decision Layer
 
-> **Find the ghosts in AI-generated code before they reach production.**
-Module 1 — AI Code Review Auditor
+Laya (by Convai Innovations, Apache 2.0) is a **System 1 decision model** — structurally incapable of hallucination because it never generates text.
 
-Your existing Ghost-Hunter functionality:
+```mermaid
+graph LR
+    subgraph PRIMITIVES ["Three Decision Primitives"]
+        P1["Choice<br/>Pick one from N options<br/>(classification/routing)"]
+        P2["Score<br/>Return numeric value<br/>(severity, confidence)"]
+        P3["Noul<br/>Calibrated yes/no probability<br/>(safety gate)"]
+    end
 
-Dependency/API Hallucination
-Blueprint/Architecture violations
-Ghost paths & swallowed exceptions
-Duplicate/internal code detection
-Evidence-based review report
-Module 2 — AI Pentest Reliability Auditor
+    subgraph USAGE ["BugBridge Usage"]
+        U1["FlakeHunter: Which root cause?<br/>async | state | ordering | env"]
+        U2["MutaCI: Mutant impact score 1–10"]
+        U3["Safety gate: Does patch touch auth paths?"]
+        U4["CausalTrace: Primary cause confidence"]
+    end
 
-The new Idea A:
+    P1 --> U1
+    P2 --> U2 & U4
+    P3 --> U3
 
-Coverage Auditor — Did the scanner actually perform the planned tests?
-Failure Auditor — Which tool calls/tests failed?
-Evidence Auditor — Is there enough evidence to support the reported result?
-Consistency Auditor — Do repeated runs on the same controlled application produce materially different results?
-Recovery Agent — Investigates missing/failed checks and retries within defined limits.
-Reliability Report — Shows what was verified versus what remains unverified.
+    style P1 fill:#a29bfe,color:#fff
+    style P2 fill:#fd79a8,color:#fff
+    style P3 fill:#00cec9,color:#fff
+```
 
-GitHub Repository:
-
-`https://github.com/Adityachaudhari11/Ghost-Hunter-AI`
+| | Jev AI | Laya AI |
+|---|---|---|
+| Creator | TypeSafe AI | Convai Innovations |
+| License | Proprietary | **Apache 2.0** |
+| Latency | ~15ms (hosted) | **~33ms (self-hosted)** |
+| Cost | $0.042/M tokens | **$0.00** |
+| Install | API key required | `pip install laya` |
+| HuggingFace | huggingface.co/jevai | **huggingface.co/convaiinnovations/laya** |
 
 ---
 
-# Implementation Plan
+## IBM Bob IDE — How It Powers Everything
 
-This section is the build plan for Module 1 (AI Code Review Auditor) and Module 2 (AI Pentest Reliability Auditor). Follow phases in order. Do not skip T0 contracts.
+| Bob Feature | BugBridge Usage |
+|---|---|
+| **Agent Mode** | Full autonomous flow: one signal in → investigation → fix → PR; engineer approves, doesn't debug |
+| **Parallel Tasks** | All 4 modules use 3+ parallel subagents simultaneously — structurally essential, not cosmetic |
+| **Subagents** | Each subagent has different tool access (trace APIs, git CLI, AST libraries, CI JSON) |
+| **Document Understanding** | Reads PR descriptions, tickets, K8s manifests, runbooks as intent documents |
+| **Bob Shell** | Executes builds, mutation tests, opens PRs, triggers canary re-validation |
 
-## 1. Tech Stack
+---
 
-```text
-Backend:        Python 3.11, FastAPI, Uvicorn, Pydantic v2, asyncio
-Code analysis:  Python `ast`, JS/TS `tree-sitter` (+ Node 20 for parsing helpers)
-Registries:     PyPI JSON API (https://pypi.org/pypi/<pkg>/json),
-                npm registry (https://registry.npmjs.org/<pkg>)
-Similarity:     sentence-transformers + FAISS (fallback: scikit-learn cosine)
-GitHub input:   PyGithub or `gh` CLI + git diff parsing
-Orchestration:  IBM Bob 2.0 subagents via `orchestrator/adapter.py`,
-                fallback: `asyncio.gather()` + direct LLM calls
-Frontend:       React + TypeScript + Vite (read-only report viewer)
-Tests/Lint:     pytest, ruff, tsc, eslint
+## Key Integrations & Repositories
+
+| Repo | Purpose |
+|---|---|
+| `openrewrite/rewrite` | LST engine — deterministic, compile-verified code transformation |
+| `modelcontextprotocol/servers` | MCP — streams runtime telemetry into Bob agent context |
+| `eunomia-bpf/agentsight` | eBPF observability for AI agent execution tracking |
+| `traceroot-ai/traceroot` | AI agent trace/debug layer |
+| `kubeops/holmesgpt` | K8s alert investigation (what we replace/augment) |
+| `openobserve/openobserve` | S3-native Rust observability backend |
+| `argoproj/argo-rollouts` | Canary rollout controller (signal source for CausalTrace) |
+| `convaiinnovations/laya` | Decision model — System 1 fast routing |
+| `receptron/laya` | Node.js/TypeScript Laya runner via ONNX |
+
+---
+
+## Demo Script (5 Minutes)
+
+```mermaid
+gantt
+    title BugBridge 5-Minute Demo Flow
+    dateFormat mm:ss
+    section MutaCI
+    PR with 97% coverage opened           :00:00, 00:15
+    48 parallel mutation agents run        :00:15, 01:00
+    4 behavioral gaps reported             :01:00, 01:15
+    Tests generated and committed          :01:15, 01:30
+    section FlakeHunter
+    Flaky test triggered in CI             :01:30, 01:40
+    3 agents classify root cause           :01:40, 02:10
+    Fix applied, 5x randomized run         :02:10, 02:30
+    section CausalTrace
+    Sentry URL pasted                      :02:30, 02:40
+    3 agents run in parallel               :02:40, 03:15
+    Causal report + fix generated          :03:15, 03:30
+    section BugPort
+    "Cannot reproduce" bug loaded          :03:30, 03:40
+    Snapshot reconstructed locally         :03:40, 04:10
+    Bug reproduced, fix applied            :04:10, 04:30
+    section Wrap
+    Mutation score shown across all PRs    :04:30, 05:00
 ```
 
-Shared contracts (define first, before any agent):
+**Judge takeaway:** One platform. Four wow moments. Every bug caught before it ships, fixed when it breaks, explained when it escapes, reproduced when it hides.
 
-* `Finding`: `id, module, severity (CRITICAL|HIGH|MEDIUM|LOW), confidence, file, line_start, line_end, snippet, problem, evidence, suggestion`
-* `ReliabilityReport`: `verified[], unverified[], coverage_pct, flaky[], recovery_attempts[]`
+---
 
-## 2. Phased Tasks
+## Build Priority (48–72 Hour Hackathon)
 
-### T0 — Contracts + fixtures (blocks all, ~4h)
-
-* `T0.1` Define `schemas/finding.py` and `schemas/reliability.py` with Pydantic validators.
-* `T0.2` Create `demo-target-repo/` (small owned FastAPI app + `ARCHITECTURE.md`, `AGENTS.md`, `UserRepository.py`, `DateUtils.py`).
-* `T0.3` Create 3 synthetic PR diffs with known ghosts + `expected-findings.json`.
-* `T0.4` Create `pentest_plan.json` + 3 `tool_calls.jsonl` runs (missing check, timeout, contradictory verdict).
-* Done when: `pytest schemas/` passes and fixtures have ground truth.
-
-### T1 — Input layer (~6h)
-
-* `T1.1` PR normalizer: PR URL / local diff -> `changed_files, hunks, new_imports`.
-* `T1.2` Pentest normalizer: plan + jsonl -> normalized run table.
-* `T1.3` Context builder: repo docs -> `architecture_rules.json` (`{rule, source, keywords}`).
-* Done when: fixtures parse without manual fixes.
-
-### T2 — Module 1 deterministic core (~8h, demoable alone)
-
-* `T2.1` Dependency Agent: AST import extract (Py `ast`, JS/TS `tree-sitter`), diff vs `main`, PyPI/npm existence check, unused-import scan.
-* `T2.2` Ghost-Path Agent: AST patterns (`except Exception: pass`, bare `except:`, `return {}/None` fallback, `TODO`, `NotImplementedError`, empty `.catch()`).
-* Done when: synthetic PR yields expected CRITICAL+HIGH with file/line evidence.
-
-### T3 — Module 1 LLM agents (~10h)
-
-* `T3.1` Blueprint Agent: retrieve top-3 rules per hunk, LLM verdict with mandatory `rule_id` citation.
-* `T3.2` Reuse Agent: index existing functions, cosine search (`>0.82 flag, 0.70-0.82 LLM review`), LLM verdict `duplicate/related/novel`.
-* `T3.3` Merger + Final Report builder (dedupe, severity sort, JSON + Markdown).
-* Done when: no finding lacks `evidence + rule_id/confidence`.
-
-### T4 — Module 2 auditors (~10h)
-
-* `T4.1` Coverage Auditor (`planned - executed_ok`) + Failure Auditor (classify `tool-error/timeout/auth/target-unreachable`).
-* `T4.2` Evidence Auditor (claim requires request+response artifact) + Consistency Auditor (diff N=2-3 runs, flag flaky).
-* `T4.3` Recovery Agent: max 2 retries, timeout cap, allowlist `curl, nmap -sV` read-only, denylist exploits/DoS/brute-force, owned demo app only.
-* Done when: missing/failed/weak/flaky cases flagged; 1 retry recovers.
-
-### T5 — API + Dashboard (~6h)
-
-* `T5.1` FastAPI: `POST /review/pr`, `POST /audit/pentest`, `GET /jobs/{id}`, `GET /report/{id}`.
-* `T5.2` React viewer: findings table (filter by severity/module), evidence drawer, verified/unverified gauge.
-* `T5.3` Wire `orchestrator/adapter.py` for Bob 2.0 fan-out/fan-in with asyncio fallback.
-* Done when: `POST` fixture -> `GET` report round-trips locally.
-
-### T6 — Eval + demo (~4h)
-
-* Run manual vs. Ghost-Hunter timing table in `Measuring the Impact`, record real numbers. No assumed percentages.
-* Demo script: `AI PR -> report -> human Fix/Ignore/Investigate`.
-
-Critical path: `T0 -> T1 -> T2 -> T3 -> T5 -> T6`. T4 parallelizes after T0.
-
-## 3. Correct Way to Follow This Plan
-
-1. Work phase by phase. Do not start T2 before T0 validators pass.
-2. One branch per task (`t0-contracts`, `t2-deps`, ...), squash-merge after `pytest + ruff` pass.
-3. Every agent output must validate against `schemas/`. Reject free-text-only findings.
-4. Keep dashboard read-only. No auto-merge, no auto-fix, no live scans outside the owned demo app.
-5. Update this README only with measured results, not projections.
-
-Suggested local loop:
-
-```bash
-python -m venv .venv
-pip install -r requirements.txt
-cp .env.example .env   # then fill in your own keys, never commit .env
-pytest -q
-uvicorn app.main:app --reload
+```mermaid
+gantt
+    title Build Order
+    dateFormat HH:mm
+    section Phase 1 (Hours 0-16)
+    Laya AI integration layer              :00:00, 04:00
+    MutaCI — Stryker + diff scoping        :04:00, 10:00
+    MutaCI — Bob orchestration + demo      :10:00, 16:00
+    section Phase 2 (Hours 16-32)
+    FlakeHunter — CI log parsing           :16:00, 22:00
+    FlakeHunter — 3 subagents + fix gen    :22:00, 28:00
+    FlakeHunter — validation + demo        :28:00, 32:00
+    section Phase 3 (Hours 32-48)
+    CausalTrace — GitHub + trace APIs      :32:00, 38:00
+    CausalTrace — causal synthesis         :38:00, 44:00
+    BugPort — pre-recorded demo asset      :44:00, 48:00
+    section Stretch (Hours 48-72)
+    BugPort — full sidecar implementation  :48:00, 60:00
+    OpenRewrite LST integration            :60:00, 68:00
+    End-to-end demo polish                 :68:00, 72:00
 ```
 
-## 4. Credentials Policy (no leaks)
+---
 
-Rules:
+## Target GitHub Repositories (Demo Data)
 
-```text
-1. Never commit `.env`, `.env.local`, `*.pem`, `*.key`, or any file containing tokens.
-2. Commit only `.env.example` with placeholder values.
-3. `.gitignore` must contain: `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`.
-4. Load secrets only via environment variables (`os.getenv`), never hardcoded.
-5. Do not print secrets in logs/reports. Redact `Authorization`, `token`, `api_key` fields.
-6. If a secret is accidentally committed: rotate it immediately, purge history, do not just delete the file.
-7. Enable GitHub secret scanning / push protection on the repo.
+10 real, active repositories with open issues that BugBridge directly addresses — verified Sept 2026.
+
+| # | Repository | Language | Stars | BugBridge Module | Issue Type |
+|---|---|---|---|---|---|
+| 1 | [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes) | Go | ~128k | FlakeHunter + CausalTrace | e2e flakes filed multiple times/week ([#142349](https://github.com/kubernetes/kubernetes/issues/142349)) |
+| 2 | [vercel/next.js](https://github.com/vercel/next.js) | TypeScript | ~135k | BugPort + CausalTrace | Bugs only reproducible on deployed infra ([#91723](https://github.com/vercel/next.js/issues/91723)) |
+| 3 | [elastic/elasticsearch](https://github.com/elastic/elasticsearch) | Java | ~77.9k | FlakeHunter + MutaCI | Team merged auto-retry-to-pass as a workaround ([#160210](https://github.com/elastic/elasticsearch/issues/160210)) |
+| 4 | [grafana/grafana](https://github.com/grafana/grafana) | Go/TS | ~76.9k | FlakeHunter + CausalTrace | CI migration broke integration tests; tests skipped to unblock builds ([#105433](https://github.com/grafana/grafana/issues/105433)) |
+| 5 | [apache/airflow](https://github.com/apache/airflow) | Python | ~46.9k | FlakeHunter + BugPort | Tests formally quarantined because they can't be fixed ([#32778](https://github.com/apache/airflow/issues/32778)) |
+| 6 | [celery/celery](https://github.com/celery/celery) | Python | ~28.9k | CausalTrace + BugPort | Production SIGTERM race during K8s startup — nearly impossible to reproduce ([discussion #10209](https://github.com/celery/celery/discussions/10209)) |
+| 7 | [apache/spark](https://github.com/apache/spark) | Scala/Python | ~40k | FlakeHunter + CausalTrace | Async log assertion flakes repeating across modules ([PR #58780](https://github.com/apache/spark/pull/58780)) |
+| 8 | [vitest-dev/vitest](https://github.com/vitest-dev/vitest) | TypeScript | ~17k | FlakeHunter + MutaCI | Test framework's own pool has race conditions ([#8852](https://github.com/vitest-dev/vitest/issues/8852)) |
+| 9 | [foundry-rs/foundry](https://github.com/foundry-rs/foundry) | Rust | ~10.5k | FlakeHunter + MutaCI | Dedicated nightly flaky-test workflow is itself failing ([#16796](https://github.com/foundry-rs/foundry/issues/16796)) |
+| 10 | [WordPress/gutenberg](https://github.com/WordPress/gutenberg) | TypeScript | ~11.8k | FlakeHunter + MutaCI | GitHub Actions auto-files 50+ `[Flaky Test]` issues/month ([#76524](https://github.com/WordPress/gutenberg/issues/76524)) |
+
+### Notable Patterns from the Data
+
+```mermaid
+pie title BugBridge Module Demand Across 10 Repos
+    "FlakeHunter" : 8
+    "CausalTrace" : 5
+    "BugPort" : 3
+    "MutaCI" : 5
 ```
 
-Planned `.env.example` (placeholders only, create when backend work starts — do not create real `.env` in git):
+**Key insight**: 8 of 10 repos have active flaky test crises. The industry has detection tooling (auto-filing issues, retry mechanisms) but zero fixing tooling. FlakeHunter addresses the highest-frequency pain point across the most prestigious repositories in open source.
 
-```bash
-# Copy to .env and fill locally. Never commit .env.
-GITHUB_TOKEN=ghp_REPLACE_ME
-LLM_API_KEY=REPLACE_ME
-LLM_BASE_URL=https://REPLACE_ME
-LLM_MODEL=REPLACE_ME
-BOB_API_KEY=REPLACE_ME
-BOB_BASE_URL=https://REPLACE_ME
-REPORT_DIR=./reports
-DEMO_TARGET_REPO=./demo-target-repo
-```
+---
 
-Verify before each commit:
+## Research Basis
 
-```bash
-git status --porcelain
-git check-ignore -v .env
-grep -r "ghp_\|sk-\|api_key.*[A-Za-z0-9]\{16\}" --exclude-dir=.git --exclude=.env.example . || true
-```
+- **150+ sources** across debugging, code review, testing, maintenance, and deployment domains
+- **Sept 2026 data** from Stack Overflow Developer Survey (49,000+ respondents), JetBrains State of Developer Ecosystem, DORA benchmarks, LinearB (8.1M PR analysis), Qodo State of AI Code Quality, IDC developer productivity report
+- **Academic papers**: Meta mutation testing (arXiv 2501.12862), CrossTrace (arXiv 2508.11342), TORAI (arXiv 2604.13522), FlakyGuard (ASE 2025), ChaCo (PR-level test augmentation), ReProAgent (arXiv 2503.20036)
+- **NotebookLM synthesis**: AST-to-Runtime Semantic Void framing, eBPF integration patterns, OpenRewrite LST strategy

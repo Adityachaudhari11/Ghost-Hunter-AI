@@ -21,6 +21,17 @@ class Settings:
     bob_base_url: str = field(default_factory=lambda: _get("BOB_BASE_URL"))
     report_dir: str = field(default_factory=lambda: _get("REPORT_DIR", "./reports"))
     database_url: str = field(default_factory=lambda: _get("DATABASE_URL", ""))
+    # Laya AI
+    laya_model_path: str = field(default_factory=lambda: _get("LAYA_MODEL_PATH", ""))
+    # MutaCI
+    mutation_runner: str = field(default_factory=lambda: _get("MUTATION_RUNNER", "stub"))
+    # CausalTrace
+    sentry_dsn: str = field(default_factory=lambda: _get("SENTRY_DSN", ""))
+    datadog_api_key: str = field(default_factory=lambda: _get("DATADOG_API_KEY", ""))
+    datadog_app_key: str = field(default_factory=lambda: _get("DATADOG_APP_KEY", ""))
+    jaeger_url: str = field(default_factory=lambda: _get("JAEGER_URL", "http://localhost:16686"))
+    # BugPort
+    bugport_store: str = field(default_factory=lambda: _get("BUGPORT_STORE", "./reports/bugport-snapshots"))
 
     @property
     def bob_enabled(self) -> bool:

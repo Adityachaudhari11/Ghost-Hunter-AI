@@ -1,0 +1,29 @@
+{
+  "snapshot": {
+    "snapshot_id": "snap-demo-001",
+    "git_sha": "deadbeef447",
+    "service": "payment-service",
+    "timestamp": "2025-01-26T03:17:42Z",
+    "call_stack": [
+      "payment_service.checkout.charge_payment:42",
+      "payment_service.checkout.process:28",
+      "payment_service.api.POST /checkout:15"
+    ],
+    "db_query_results": [
+      {"__table__": "users", "id": 9912, "email": "guest@example.com", "payment_method_id": null},
+      {"__table__": "carts", "id": 5541, "user_id": 9912, "total": 149}
+    ],
+    "env_spec": {
+      "APP_ENV": "production",
+      "DB_POOL_SIZE": "10",
+      "PAYMENT_GATEWAY": "stripe",
+      "LOG_LEVEL": "info"
+    },
+    "state_snapshot": {
+      "current_user_id": 9912,
+      "cart_id": 5541,
+      "payment_method": null,
+      "is_guest": true
+    }
+  }
+}
