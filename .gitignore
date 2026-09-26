@@ -1,0 +1,47 @@
+# ── Python ────────────────────────────────────────────────────
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ── Laya model weights (804 MB — download separately via HuggingFace) ────
+laya_model/model.safetensors
+laya_model/tokenizer/
+laya_model/encoder/
+
+# ── Node / TypeScript ─────────────────────────────────────────
+demo-app/node_modules/
+real-target/node_modules/
+real-target-jest/node_modules/
+*.tsbuildinfo
+
+# ── Stryker / test output artifacts ──────────────────────────
+reports/
+demo-app/reports/
+.stryker-tmp/
+
+# ── Local docs (internal only — not for repo) ────────────────
+docs/
+
+# ── Research notes (internal) ────────────────────────────────
+research_notes/
+
+# ── Cloned reference repos (not our code) ───────────────────
+real-target/
+real-target-jest/
+
+# ── Test coverage output ──────────────────────────────────────
+demo-app/coverage/
+
+# ── OS / IDE ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

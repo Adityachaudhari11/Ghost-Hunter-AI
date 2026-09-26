@@ -1,0 +1,28 @@
+{
+  "name": "bugbridge-demo-app",
+  "version": "1.0.0",
+  "description": "Demo e-commerce TypeScript app for BugBridge MutaCI showcase",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "stryker": "stryker run"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^8.0.0",
+    "@stryker-mutator/jest-runner": "^8.0.0",
+    "@stryker-mutator/typescript-checker": "^8.0.0",
+    "@types/jest": "^29.5.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.4.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.ts"],
+    "collectCoverage": false,
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["json", "text"],
+    "collectCoverageFrom": ["src/**/*.ts"]
+  }
+}

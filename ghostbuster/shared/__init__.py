@@ -1,0 +1,1 @@
+﻿"""Shared GhostBuster utilities."""

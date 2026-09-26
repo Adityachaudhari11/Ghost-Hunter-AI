@@ -1,0 +1,5 @@
+anthropic>=1.8.0
+python-docx>=1.2.0
+requests>=2.34.0
+# laya — install separately: pip install laya
+# (Apache 2.0, self-hosted, ~33ms, convaiinnovations/laya on HuggingFace)
