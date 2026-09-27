@@ -3,12 +3,15 @@
 > **IBM Bob IDE Hackathon Submission**  
 > Theme: Improve a specific developer workflow — Bug Fixing & Bug Identification
 
+<<<<<<< HEAD
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/Node-20%2B-green?logo=node.js&logoColor=white)
 ![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 ![Model: ModernBERT-large](https://img.shields.io/badge/AI-ModernBERT--large-purple?logo=huggingface&logoColor=white)
 ![Powered by IBM Bob IDE](https://img.shields.io/badge/Orchestration-IBM%20Bob%20IDE-054ADA?logo=ibm&logoColor=white)
 
+=======
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 GhostBuster is a closed-loop, self-healing developer workflow that bridges live runtime telemetry directly into deterministic, compile-safe source code fixes — orchestrated entirely by IBM Bob IDE.
 
 When a bug signal appears anywhere in the SDLC (CI failure, production incident, test flake, behavioral gap in a PR), GhostBuster catches it, explains it, and generates a fix. The engineer approves — they don't debug.
@@ -33,8 +36,12 @@ Bug Signal (PR diff / CI log / Sentry alert / production snapshot)
     │
     ▼
 [LAYER 3: OpenRewrite — Deterministic execution]
+<<<<<<< HEAD
     │  Compile-verified LST transformation
     │  No hallucinated diffs
+=======
+    │  Compile-verified LST transformation — no hallucinated diffs
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
     │
     ▼
 PR Opened — Engineer approves, does not debug
@@ -44,7 +51,11 @@ PR Opened — Engineer approves, does not debug
 
 ---
 
+<<<<<<< HEAD
 ## The 5 Modules
+=======
+## The 4 Modules
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 
 | Module | Signal | Bob Action |
 |---|---|---|
@@ -52,12 +63,16 @@ PR Opened — Engineer approves, does not debug
 | **FlakeHunter** | CI test fails non-deterministically | Classify root cause → generate validated fix |
 | **CausalTrace** | Production error (Sentry/Datadog/K8s) | Trace + git blame + ticket → causal narrative + fix |
 | **BugPort** | Bug that can't be reproduced locally | Capture production snapshot → reproduce in 90s |
+<<<<<<< HEAD
 | **SlopWatch** | AI-generated PR diff | Hallucination gate (PyPI/npm check) + blueprint rules + ghost-path hunt |
+=======
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 
 ---
 
 ## Prerequisites
 
+<<<<<<< HEAD
 | Requirement | Version | Purpose |
 |---|---|---|
 | Python | 3.11+ | Platform runtime |
@@ -82,13 +97,39 @@ PR Opened — Engineer approves, does not debug
 ## Quick Start (6 Steps)
 
 ### Step 1 — Clone
+=======
+- Python 3.11+
+- Node.js 20+
+- Git
+- ~4 GB free disk (Laya weights = 804 MB)
+- Anthropic API key — optional, all modules have `--demo` mode without it
+
+---
+
+## Setup
+
+### 1. Clone this repo
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 
 ```bash
 git clone https://github.com/Adityachaudhari11/Ghost-Hunter-AI.git
 cd Ghost-Hunter-AI
 ```
 
+<<<<<<< HEAD
 ### Step 2 — Python environment
+=======
+### 2. Clone the real-world target repo
+
+MutaCI runs against **class-validator** — a TypeScript + Jest project with 10k+ stars used by real production teams.
+
+```bash
+git clone https://github.com/typestack/class-validator.git real-target-jest
+cd real-target-jest && npm install && cd ..
+```
+
+### 3. Python environment
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 
 ```bash
 python -m venv venv
@@ -100,11 +141,20 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
+<<<<<<< HEAD
 ```
 
 ### Step 3 — Download Laya model weights
 
 The weights (~804 MB) are not in git — download from HuggingFace:
+=======
+pip install torch transformers safetensors numpy huggingface_hub
+```
+
+### 4. Download Laya model weights
+
+The weights (~804 MB) are not in git. Download from HuggingFace:
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 
 ```bash
 python -c "
@@ -113,6 +163,7 @@ snapshot_download('convaiinnovations/laya', local_dir='laya_model', ignore_patte
 print('Laya model ready.')
 "
 ```
+
 
 > **HuggingFace repo:** https://huggingface.co/convaiinnovations/laya  
 > If the download requires auth, set `HF_TOKEN` in your environment first.
@@ -196,6 +247,49 @@ cd real-target-jest && npm install && cd ..
 
 # Run (5-15 min, no --demo flag)
 python -m ghostbuster.mutaci.run_mutaci --project real-target-jest/
+=======
+> HuggingFace repo: https://huggingface.co/convaiinnovations/laya  
+> If you hit rate limits, set `HF_TOKEN` in your environment.
+
+### 5. Demo app dependencies
+
+```bash
+cd demo-app && npm install && cd ..
+```
+
+### 6. Environment variables
+
+```bash
+cp .env.example .env
+# then fill in ANTHROPIC_API_KEY (optional) and HF_TOKEN (optional)
+```
+
+```env
+# .env.example
+ANTHROPIC_API_KEY=sk-ant-...
+HF_TOKEN=hf_...
+```
+
+---
+
+## Running the Demo
+
+```bash
+# Full 5-module platform demo
+python -m ghostbuster.run_platform --demo
+
+# Individual modules
+python -m ghostbuster.mutaci.run_mutaci --demo
+python -m ghostbuster.flakehunter.run_flakehunter --demo
+python -m ghostbuster.causaltrace.run_causaltrace --demo
+python -m ghostbuster.bugport.run_bugport --demo
+
+# Run against real code (MutaCI on class-validator)
+python -m ghostbuster.mutaci.run_mutaci --project real-target-jest/
+
+# Run the demo-app tests
+cd demo-app && npx jest
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 ```
 
 ---
@@ -204,6 +298,7 @@ python -m ghostbuster.mutaci.run_mutaci --project real-target-jest/
 
 ```
 Ghost-Hunter-AI/
+<<<<<<< HEAD
 ├── bob_sessions/                 # IBM Bob IDE integration
 │   ├── session_config.json       # Agent mode config — Bob reads this
 │   ├── tools/                    # MCP tool definitions (one per module)
@@ -215,11 +310,14 @@ Ghost-Hunter-AI/
 │       ├── pr_review.json        # Triggered on PR open
 │       └── incident_response.json
 │
+=======
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 ├── ghostbuster/                  # Core Python platform
 │   ├── mutaci/                   # Module 1: PR mutation testing
 │   ├── flakehunter/              # Module 2: CI flake classification + fix
 │   ├── causaltrace/              # Module 3: Production incident RCA
 │   ├── bugport/                  # Module 4: Production reproduction
+<<<<<<< HEAD
 │   ├── slopwatch/                # Module 5: AI slop gate
 │   │   ├── hallucination.py      # Scanner 1: PyPI/npm registry + typosquat + API check
 │   │   ├── blueprint.py          # Scanner 2: architecture rule grep (RAW_SQL, CUSTOM_TIME…)
@@ -247,6 +345,17 @@ Ghost-Hunter-AI/
 │   └── tests/                    # Base tests + MutaCI-generated tests
 │
 ├── real-target-jest/             # Clone separately: typestack/class-validator
+=======
+│   ├── shared/laya_client.py     # Laya AI wrapper (real model + fallback)
+│   └── run_platform.py           # Unified demo runner
+├── laya_model/                   # Laya inference scripts (weights downloaded separately)
+│   ├── rl_agent_api.py
+│   ├── rl_common.py
+│   └── rl_agent_config.json
+├── demo-app/                     # TypeScript project with intentional behavioral gaps
+│   ├── src/                      # pricing.ts, cart.ts, inventory.ts
+│   └── tests/
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -258,6 +367,7 @@ Ghost-Hunter-AI/
 
 | Component | Technology |
 |---|---|
+<<<<<<< HEAD
 | Decision AI | Laya AI (ModernBERT-large, Apache 2.0, ~33ms) |
 | Reasoning AI | Claude claude-sonnet-4-6 via Anthropic API |
 | IDE Orchestration | IBM Bob IDE (agent mode, parallel tasks, subagents) |
@@ -343,6 +453,21 @@ is BLOCKED — the author must replace invented imports first).
 
 - **Line coverage fallacy:** ρ = 0.112 correlation with actual bug detection (Inozemtseva & Holmes, 2014)
 - **Flaky tests:** $2,250/dev/month wasted (Listfield, Meta Engineering, 2023)
+=======
+| Decision AI | Laya AI — ModernBERT-large, Apache 2.0, ~33ms |
+| Reasoning AI | Claude claude-sonnet-4-6 via Anthropic API |
+| IDE Orchestration | IBM Bob IDE — agent mode, parallel tasks, subagents |
+| Mutation Testing | Stryker Mutator (TypeScript/Jest) |
+| Code Transform | OpenRewrite LST (compile-verified patches) |
+| Runtime Telemetry | MCP (Model Context Protocol) |
+
+---
+
+## Key Research Backing
+
+- **Line coverage fallacy:** ρ = 0.112 correlation with actual bug detection
+- **Flaky tests:** $2,250/dev/month wasted
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
 - **PR-scoped mutation testing:** Meta proved feasible at scale (January 2025)
 - **Human SRE vs AI RCA:** Humans still outperform AI at root cause analysis (80% vs 67%)
 
@@ -350,4 +475,8 @@ is BLOCKED — the author must replace invented imports first).
 
 ## License
 
+<<<<<<< HEAD
 Apache 2.0 — same as Laya AI.
+=======
+Apache 2.0
+>>>>>>> 229ab9c67f5ef899a51c9366ffb74866333c972d
