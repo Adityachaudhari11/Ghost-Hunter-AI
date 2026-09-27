@@ -1,0 +1,81 @@
+{
+  "name": "slopwatch",
+  "description": "SlopWatch — AI slop gate for PR diffs. (1) Hallucination Registry: extracts every import and verifies it against PyPI/npm + installed APIs, BLOCKS on hallucinated packages. (2) Blueprint Asserter: greps for architecture violations (raw SQL, reinvented formatters, raw HTTP, print logging). (3) Ghost Path Hunter: flags swallowed exceptions (except: pass), empty catch blocks, silent fallbacks and TODO placeholders. (4) watsonx.ai remediation: Granite generates a fix suggestion per top finding (rule templates when offline).",
+  "version": "1.0.0",
+  "type": "mcp_tool",
+  "invocation": {
+    "command": "python",
+    "args": ["-m", "ghostbuster.slopwatch.run_slopwatch"],
+    "cwd": "${workspaceRoot}"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "target": {
+        "type": "string",
+        "description": "Local path OR GitHub URL (https://github.com/owner/repo) to scan. GitHub URLs are shallow-cloned automatically.",
+        "default": "."
+      },
+      "branch": {
+        "type": "string",
+        "description": "Branch to checkout when target is a GitHub URL.",
+        "default": ""
+      },
+      "explain": {
+        "type": "boolean",
+        "description": "Attach watsonx.ai (Granite) remediation suggestions to top findings. Falls back to rule templates offline.",
+        "default": true
+      },
+      "diff": {
+        "type": "string",
+        "description": "Path to a unified diff file — restricts the scan to touched files.",
+        "default": ""
+      },
+      "blueprint": {
+        "type": "string",
+        "description": "Path to custom blueprint rules JSON (added to the defaults).",
+        "default": ""
+      },
+      "demo": {
+        "type": "boolean",
+        "description": "Run with pre-recorded demo data instead of a live scan.",
+        "default": false
+      }
+    },
+    "required": ["target"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "description": "'blocked' (hallucination found), 'warnings', or 'clean'."
+      },
+      "blockers": {
+        "type": "integer",
+        "description": "Count of BLOCK-severity findings (severity >= 9)."
+      },
+      "warnings": {
+        "type": "integer",
+        "description": "Count of WARN-severity findings."
+      },
+      "findings": {
+        "type": "array",
+        "items": { "type": "object" },
+        "description": "Each finding: id, scanner, file, line, message, fix."
+      }
+    }
+  },
+  "examples": [
+    {
+      "title": "Demo gate run",
+      "input": { "target": ".", "demo": true },
+      "description": "6 pre-recorded findings (1 BLOCK, 5 WARN) in ~1 second, no network needed."
+    },
+    {
+      "title": "Live gate on a PR workspace",
+      "input": { "target": "demo-app" },
+      "description": "Scans every .py/.ts/.js file; exit code 1 when hallucinations block the merge."
+    }
+  ]
+}

@@ -9,7 +9,8 @@
     "bob_sessions/tools/mutaci.json",
     "bob_sessions/tools/flakehunter.json",
     "bob_sessions/tools/causaltrace.json",
-    "bob_sessions/tools/bugport.json"
+    "bob_sessions/tools/bugport.json",
+    "bob_sessions/tools/slopwatch.json"
   ],
   "workflows": [
     "bob_sessions/workflows/pr_review.json",
@@ -17,7 +18,11 @@
   ],
   "environment": {
     "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
-    "HF_TOKEN": "${HF_TOKEN}"
+    "HF_TOKEN": "${HF_TOKEN}",
+    "WATSONX_API_KEY": "${WATSONX_API_KEY}",
+    "WATSONX_PROJECT_ID": "${WATSONX_PROJECT_ID}",
+    "WATSONX_URL": "${WATSONX_URL}",
+    "WATSONX_MODEL_ID": "${WATSONX_MODEL_ID}"
   },
   "laya": {
     "model_dir": "laya_model",

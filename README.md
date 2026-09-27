@@ -44,7 +44,7 @@ PR Opened — Engineer approves, does not debug
 
 ---
 
-## The 4 Modules
+## The 5 Modules
 
 | Module | Signal | Bob Action |
 |---|---|---|
@@ -52,6 +52,7 @@ PR Opened — Engineer approves, does not debug
 | **FlakeHunter** | CI test fails non-deterministically | Classify root cause → generate validated fix |
 | **CausalTrace** | Production error (Sentry/Datadog/K8s) | Trace + git blame + ticket → causal narrative + fix |
 | **BugPort** | Bug that can't be reproduced locally | Capture production snapshot → reproduce in 90s |
+| **SlopWatch** | AI-generated PR diff | Hallucination gate (PyPI/npm check) + blueprint rules + ghost-path hunt |
 
 ---
 
@@ -72,6 +73,7 @@ PR Opened — Engineer approves, does not debug
 |---|---|---|---|
 | Anthropic (Claude) | `ANTHROPIC_API_KEY` | **Optional** — all modules have `--demo` mode | [console.anthropic.com](https://console.anthropic.com/) |
 | HuggingFace | `HF_TOKEN` | **Optional** — only needed if unauthenticated downloads fail | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| IBM watsonx.ai | `WATSONX_API_KEY` + `WATSONX_PROJECT_ID` | **Optional** — live Granite remediations; rule templates otherwise | [cloud.ibm.com](https://cloud.ibm.com/) (IAM API key + project ID) |
 
 > **Demo mode works without any API keys.** Set `ANTHROPIC_API_KEY` only when you want live Claude test generation / fix synthesis instead of pre-recorded demo output.
 
@@ -174,6 +176,15 @@ python -m ghostbuster.causaltrace.run_causaltrace --demo
 
 # Module 4: BugPort — Production bug reproduction
 python -m ghostbuster.bugport.run_bugport --demo
+
+# Module 5: SlopWatch — AI slop gate (hallucination / blueprint / ghost path)
+python -m ghostbuster.slopwatch.run_slopwatch --demo
+python -m ghostbuster.slopwatch.run_slopwatch --target ./my-pr-workspace
+python -m ghostbuster.slopwatch.run_slopwatch --target . --diff pr_512.diff --output-json report.json
+
+# Live evaluation of any GitHub repo (shallow-cloned to a temp dir, auto-cleaned)
+python -m ghostbuster.slopwatch.run_slopwatch --target https://github.com/psf/requests.git
+python -m ghostbuster.slopwatch.run_slopwatch --target https://github.com/owner/repo.git --branch dev --keep-clone
 ```
 
 ### Live MutaCI run against class-validator (TypeScript, 10k+ stars)
@@ -209,6 +220,14 @@ Ghost-Hunter-AI/
 │   ├── flakehunter/              # Module 2: CI flake classification + fix
 │   ├── causaltrace/              # Module 3: Production incident RCA
 │   ├── bugport/                  # Module 4: Production reproduction
+│   ├── slopwatch/                # Module 5: AI slop gate
+│   │   ├── hallucination.py      # Scanner 1: PyPI/npm registry + typosquat + API check
+│   │   ├── blueprint.py          # Scanner 2: architecture rule grep (RAW_SQL, CUSTOM_TIME…)
+│   │   ├── ghostpath.py          # Scanner 3: swallowed exceptions, empty catch, TODOs
+│   │   ├── orchestrator.py       # SlopWatchOrchestrator (parallel gate + Laya triage)
+│   │   ├── run_slopwatch.py      # CLI: --target --diff --blueprint --demo --output-json
+│   │   ├── demo_data.py          # Pre-recorded demo findings
+│   │   └── fixtures/             # ai_slop_sample.py/.ts — deliberately bad AI code
 │   ├── shared/
 │   │   └── laya_client.py        # Laya AI wrapper (real model + heuristic fallback)
 │   ├── laya_finetune/            # Domain fine-tuning for Laya
@@ -271,6 +290,54 @@ python ghostbuster/laya_finetune/train.py --dry-run
 See [`ghostbuster/laya_finetune/data/README.md`](ghostbuster/laya_finetune/data/README.md) for the full data format, label guide, and collection strategy.
 
 ---
+
+## What SlopWatch Does (Module 5 — AI Slop Gate)
+
+AI coding assistants invent packages, ignore team conventions, and swallow
+errors. SlopWatch is the merge gate that catches all three failure modes in
+one `run` — every finding carries a concrete fix suggestion:
+
+1. **Slop Squatting & API Hallucination Registry** (`hallucination.py`) —
+   extracts every import from the diff (Python via `ast`, JS/TS via
+   `import`/`require` parsing), classifies it as stdlib / internal / external,
+   and checks externals against the live **PyPI / npm** registries plus the
+   installed packages. Unknown-on-offline is `WARN`, absent-from-registry is a
+   critical red `BLOCK`: *"Warning: Likely AI Hallucination. High risk of
+   supply chain attack."* A Levenshtein check against popular packages
+   (`requestes`→`requests`, `lodahs`→`lodash`) catches typosquats, and a
+   `hasattr` pass over installed packages catches invented methods
+   (`os.nonexistent_xyz_123`).
+2. **Semantic Grep / Blueprint Asserter** (`blueprint.py`) — greps new code
+   against the team's architecture rules: `RAW_SQL` (raw SQL instead of the
+   ORM wrapper), `CUSTOM_TIME` (hand-rolled `strftime` instead of
+   `format_timestamp`), `DIRECT_ENV`, `PRINT_LOG`, `RAW_HTTP` (raw
+   `fetch`/`axios` instead of the API client). Extend with
+   `--blueprint rules.json`; `config.py`-style modules are exempt from
+   `DIRECT_ENV` by design.
+3. **Ghost Path & Exception Hunter** (`ghostpath.py`) — AST analysis of every
+   `try/except` plus regex cover for JS/TS `catch`: `except Exception: pass`,
+   empty `catch {}`, silent `return None/False/[]` fallbacks, and
+   `TODO: handle failure` placeholders are all flagged with severity 5–8.
+
+Exit code `1` = `BLOCKED` (hallucination found, do not merge);
+`0` with WARNs = merge after review; `0` silent = clean.
+`--demo` reproduces the gate in ~1s with no network or API keys.
+
+### watsonx.ai remediation (the extra Bob-agent brain)
+
+Every gate run ends with a remediation step for the top 5 findings
+(all BLOCKs first). The source is always labelled:
+
+- **Live Granite** (`💡 [watsonx.ai · ibm/granite-3-8b-instruct]`) when
+  `WATSONX_API_KEY` + `WATSONX_PROJECT_ID` are set — uses the official
+  `ibm-watsonx-ai` SDK if installed, otherwise the HTTPS REST API
+  (only `requests` needed). Disable per-run with `--no-explain`.
+- **Rule templates** (`💡 [built-in rules …]` / `[watsonx.ai · demo template]`)
+  when offline or in `--demo` — the gate never breaks without credentials.
+
+In the Bob `pr_review` workflow this is the `watsonx_remediation` step:
+Granite's suggestions are posted inline on the PR (skipped while the gate
+is BLOCKED — the author must replace invented imports first).
 
 ## Key Research Backing
 

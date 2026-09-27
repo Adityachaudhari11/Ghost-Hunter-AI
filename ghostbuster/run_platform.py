@@ -40,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description="GhostBuster — Full platform demo")
     parser.add_argument("--demo", action="store_true", default=True,
                         help="Run in demo mode (default: True)")
-    parser.add_argument("--module", choices=["all", "mutaci", "flakehunter", "causaltrace", "bugport"],
+    parser.add_argument("--module", choices=["all", "mutaci", "flakehunter", "causaltrace", "bugport", "slopwatch"],
                         default="all", help="Which module to run")
     args = parser.parse_args()
 
@@ -89,6 +89,14 @@ def main():
         bugport_report = bugport.run()
         time.sleep(0.3)
 
+    # ── Module 5: SlopWatch ────────────────────────────────────────────
+    if run_all or args.module == "slopwatch":
+        print_module_divider(5, "SlopWatch", "AI slop gate — hallucination / blueprint / ghost path")
+        from ghostbuster.slopwatch.orchestrator import SlopWatchOrchestrator
+        slop = SlopWatchOrchestrator(demo_mode=True)
+        slop_report = slop.run(target=project_path)
+        time.sleep(0.3)
+
     # ── Platform Summary ─────────────────────────────────────────────────
     if run_all:
         print("\n" + "═" * 60)
@@ -103,6 +111,8 @@ def main():
         print("                   Causal narrative + regression test generated")
         print("  ✅  BugPort:     Race condition reproduced locally in <90s")
         print("                   Harness written, 86% Laya reproduction confidence")
+        print("  ✅  SlopWatch:   AI-slop gate — hallucinations BLOCK merge,")
+        print("                   blueprint violations + ghost paths flagged as WARNs")
         print("\n  Every decision routed through Laya AI (System 1, 33ms).")
         print("  Every fix is compile-safe. No hallucinated diffs.")
         print("  Engineer approves. Does not debug.")

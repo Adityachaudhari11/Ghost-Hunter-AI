@@ -5,10 +5,29 @@
   "trigger": "pr_opened",
   "steps": [
     {
+      "id": "slop_gate",
+      "name": "SlopWatch AI-slop gate",
+      "description": "Scan the PR workspace for hallucinated imports (PyPI/npm), blueprint violations, and ghost paths. BLOCKS the review when hallucinations are found.",
+      "tool": "slopwatch",
+      "input_mapping": {
+        "target": "${trigger.repo_path}",
+        "explain": true
+      }
+    },
+    {
+      "id": "watsonx_remediation",
+      "name": "watsonx.ai remediation (Granite)",
+      "description": "For each SlopWatch BLOCK/WARN, IBM watsonx.ai generates a minimal fix suggestion, posted inline on the PR. Skipped when the gate is blocked on hallucinations — author must replace invented imports first.",
+      "depends_on": ["slop_gate"],
+      "condition": "${slop_gate.status} != blocked"
+    },
+    {
       "id": "scope_diff",
       "name": "Scope changed files",
       "description": "Identify which TypeScript files changed in the PR diff.",
       "tool": "mutaci",
+      "depends_on": ["slop_gate"],
+      "condition": "${slop_gate.status} != blocked",
       "input_mapping": {
         "pr_description": "${trigger.pr_description}",
         "project": "${trigger.repo_path}"

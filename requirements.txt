@@ -17,6 +17,16 @@ safetensors>=0.4.0
 numpy>=1.24.0
 huggingface_hub>=0.20.0
 
+# ── IBM watsonx.ai (optional) ─────────────────────────────────────────────
+# Required only for LIVE Granite remediation (ghostbuster/shared/watsonx_client.py).
+# Without it, SlopWatch uses built-in rule templates automatically.
+# The REST fallback works with just `requests` (above); install the SDK for
+# the preferred path:
+#
+#   pip install ibm-watsonx-ai
+#
+# ibm-watsonx-ai>=1.0.0
+
 # ── Laya fine-tuning (optional) ───────────────────────────────────────────────
 # Required only when running ghostbuster/laya_finetune/train.py
 # LoRA fine-tune (--lora flag) also requires peft:
