@@ -1,5 +1,26 @@
+# ── Core runtime ──────────────────────────────────────────────────────────────
 anthropic>=1.8.0
 python-docx>=1.2.0
 requests>=2.34.0
-# laya — install separately: pip install laya
-# (Apache 2.0, self-hosted, ~33ms, convaiinnovations/laya on HuggingFace)
+python-dotenv>=1.0.0
+
+# ── Laya AI — ML stack for real model inference ───────────────────────────────
+# Install these to run the real Laya model (ModernBERT-large, ~804 MB).
+# Without them, all modules fall back to fast keyword heuristics automatically.
+#
+#   pip install torch transformers safetensors numpy huggingface_hub
+#
+# Pinned minimums for Laya compatibility:
+torch>=2.1.0
+transformers>=4.38.0
+safetensors>=0.4.0
+numpy>=1.24.0
+huggingface_hub>=0.20.0
+
+# ── Laya fine-tuning (optional) ───────────────────────────────────────────────
+# Required only when running ghostbuster/laya_finetune/train.py
+# LoRA fine-tune (--lora flag) also requires peft:
+#
+#   pip install peft
+#
+# peft>=0.10.0

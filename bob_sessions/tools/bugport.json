@@ -1,0 +1,64 @@
+{
+  "name": "bugport",
+  "description": "BugPort — Reproduce a production bug locally in under 90 seconds. Captures a sanitised production snapshot (DB state + request context), checks PII safety via Laya AI, then writes a minimal reproduction harness that engineers can run locally.",
+  "version": "1.0.0",
+  "type": "mcp_tool",
+  "invocation": {
+    "command": "python",
+    "args": ["-m", "ghostbuster.bugport.run_bugport"],
+    "cwd": "${workspaceRoot}"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "bug_description": {
+        "type": "string",
+        "description": "Description of the bug to reproduce (e.g. 'Race condition in inventory reservation causing negative stock')."
+      },
+      "snapshot_json": {
+        "type": "string",
+        "description": "Production DB/state snapshot as a JSON string. PII fields are auto-detected and masked by Laya AI before the harness is written."
+      },
+      "demo": {
+        "type": "boolean",
+        "description": "Run with pre-recorded demo data (race condition in inventory reservation).",
+        "default": false
+      }
+    },
+    "required": []
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "harness_path": {
+        "type": "string",
+        "description": "Path to the generated reproduction harness file."
+      },
+      "pii_fields_masked": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of snapshot fields that were masked due to PII detection."
+      },
+      "reproduction_confidence": {
+        "type": "number",
+        "description": "Laya noul confidence (0.0-1.0) that the harness will reproduce the bug."
+      },
+      "report": {
+        "type": "string",
+        "description": "Full BugPort report."
+      }
+    }
+  },
+  "laya_decision": {
+    "type": "noul",
+    "question": "Does this snapshot field contain personal user data?",
+    "latency_ms": 33
+  },
+  "examples": [
+    {
+      "title": "Demo run (inventory race condition)",
+      "input": { "demo": true },
+      "description": "Captures a production snapshot of the inventory service, masks PII, reproduces a race condition locally with 86% Laya confidence."
+    }
+  ]
+}

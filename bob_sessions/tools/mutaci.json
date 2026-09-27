@@ -1,0 +1,71 @@
+{
+  "name": "mutaci",
+  "description": "MutaCI — PR-scoped mutation testing. Detects behavioral gaps that line coverage misses. Runs Stryker on the changed files, classifies each surviving mutant via Laya AI (severity score 1-10), then generates targeted tests via Claude.",
+  "version": "1.0.0",
+  "type": "mcp_tool",
+  "invocation": {
+    "command": "python",
+    "args": ["-m", "ghostbuster.mutaci.run_mutaci"],
+    "cwd": "${workspaceRoot}"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "pr_description": {
+        "type": "string",
+        "description": "Human-readable description of the PR to analyse (e.g. 'Add seasonal discount to cart checkout')."
+      },
+      "project": {
+        "type": "string",
+        "description": "Path to the TypeScript/Jest project to mutate. Defaults to demo-app/.",
+        "default": "demo-app"
+      },
+      "demo": {
+        "type": "boolean",
+        "description": "Run with pre-recorded demo data instead of a live Stryker run.",
+        "default": false
+      },
+      "anthropic_api_key": {
+        "type": "string",
+        "description": "Anthropic API key for Claude test generation. Omit to skip test generation.",
+        "default": ""
+      }
+    },
+    "required": ["pr_description"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "surviving_mutants": {
+        "type": "integer",
+        "description": "Number of surviving mutants (untested behavioural gaps)."
+      },
+      "severity_scores": {
+        "type": "array",
+        "items": { "type": "number" },
+        "description": "Laya severity scores (1-10) for each surviving mutant."
+      },
+      "generated_tests": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Paths to generated test files (written by Claude)."
+      },
+      "report": {
+        "type": "string",
+        "description": "Human-readable MutaCI report."
+      }
+    }
+  },
+  "examples": [
+    {
+      "title": "Demo run on demo-app",
+      "input": { "pr_description": "Add seasonal discount pricing to cart", "demo": true },
+      "description": "Finds 4 behavioral gaps in pricing.ts in ~5 seconds using pre-recorded Stryker output."
+    },
+    {
+      "title": "Live run on class-validator",
+      "input": { "pr_description": "Add IsPhoneNumber decorator", "project": "real-target-jest/" },
+      "description": "Full Stryker run — takes 5-15 min. Requires: cd real-target-jest && npm install."
+    }
+  ]
+}

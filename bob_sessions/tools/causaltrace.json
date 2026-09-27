@@ -1,0 +1,77 @@
+{
+  "name": "causaltrace",
+  "description": "CausalTrace — Production incident root cause analysis. Takes a Sentry/Datadog error URL or raw stack trace, correlates with git blame + recent PRs, and produces a causal narrative + compile-safe fix via Claude.",
+  "version": "1.0.0",
+  "type": "mcp_tool",
+  "invocation": {
+    "command": "python",
+    "args": ["-m", "ghostbuster.causaltrace.run_causaltrace"],
+    "cwd": "${workspaceRoot}"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "sentry_url": {
+        "type": "string",
+        "description": "Sentry issue URL (e.g. https://sentry.io/organizations/acme/issues/123456/). Used to fetch the stack trace via the Sentry API."
+      },
+      "stack_trace": {
+        "type": "string",
+        "description": "Raw stack trace text. Used directly if sentry_url is not provided."
+      },
+      "repo_path": {
+        "type": "string",
+        "description": "Path to the source repository for git blame correlation.",
+        "default": "."
+      },
+      "demo": {
+        "type": "boolean",
+        "description": "Run with pre-recorded demo data (847 prod errors traced to PR #447 in ~90s).",
+        "default": false
+      },
+      "anthropic_api_key": {
+        "type": "string",
+        "description": "Anthropic API key for causal narrative and fix generation.",
+        "default": ""
+      }
+    },
+    "required": []
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "root_cause_commit": {
+        "type": "string",
+        "description": "Git SHA of the commit that introduced the bug."
+      },
+      "causal_narrative": {
+        "type": "string",
+        "description": "Human-readable causal chain: error → code path → PR → commit."
+      },
+      "fix_code": {
+        "type": "string",
+        "description": "Suggested code fix (text diff or OpenRewrite recipe)."
+      },
+      "affected_lines": {
+        "type": "integer",
+        "description": "Number of source lines implicated in the root cause."
+      },
+      "report": {
+        "type": "string",
+        "description": "Full CausalTrace report."
+      }
+    }
+  },
+  "laya_decision": {
+    "type": "noul",
+    "question": "Does the implicated code path touch PII or financial data?",
+    "latency_ms": 33
+  },
+  "examples": [
+    {
+      "title": "Demo run (production NullPointerException)",
+      "input": { "demo": true },
+      "description": "Traces 847 CheckoutController 500 errors to a null-guard removal in PR #447 in ~90 seconds."
+    }
+  ]
+}

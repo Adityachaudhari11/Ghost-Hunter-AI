@@ -3,6 +3,12 @@
 > **IBM Bob IDE Hackathon Submission**  
 > Theme: Improve a specific developer workflow — Bug Fixing & Bug Identification
 
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
+![Node 20+](https://img.shields.io/badge/Node-20%2B-green?logo=node.js&logoColor=white)
+![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![Model: ModernBERT-large](https://img.shields.io/badge/AI-ModernBERT--large-purple?logo=huggingface&logoColor=white)
+![Powered by IBM Bob IDE](https://img.shields.io/badge/Orchestration-IBM%20Bob%20IDE-054ADA?logo=ibm&logoColor=white)
+
 GhostBuster is a closed-loop, self-healing developer workflow that bridges live runtime telemetry directly into deterministic, compile-safe source code fixes — orchestrated entirely by IBM Bob IDE.
 
 When a bug signal appears anywhere in the SDLC (CI failure, production incident, test flake, behavioral gap in a PR), GhostBuster catches it, explains it, and generates a fix. The engineer approves — they don't debug.
@@ -51,33 +57,36 @@ PR Opened — Engineer approves, does not debug
 
 ## Prerequisites
 
-- Python 3.11+
-- Node.js 20+
-- Git
-- ~4 GB free disk space (Laya weights = 804 MB)
-- An Anthropic API key (optional — all modules have `--demo` mode without it)
+| Requirement | Version | Purpose |
+|---|---|---|
+| Python | 3.11+ | Platform runtime |
+| Node.js | 20+ | Demo-app tests + Stryker |
+| Git | any | Clone + git blame in CausalTrace |
+| Disk space | ~4 GB | Laya weights (804 MB) + node_modules (~600 MB) |
 
 ---
 
-## Setup
+## Required API Keys
 
-### 1. Clone this repo
+| Key | Variable | Required? | Where to get it |
+|---|---|---|---|
+| Anthropic (Claude) | `ANTHROPIC_API_KEY` | **Optional** — all modules have `--demo` mode | [console.anthropic.com](https://console.anthropic.com/) |
+| HuggingFace | `HF_TOKEN` | **Optional** — only needed if unauthenticated downloads fail | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+
+> **Demo mode works without any API keys.** Set `ANTHROPIC_API_KEY` only when you want live Claude test generation / fix synthesis instead of pre-recorded demo output.
+
+---
+
+## Quick Start (6 Steps)
+
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/Adityachaudhari11/Ghost-Hunter-AI.git
 cd Ghost-Hunter-AI
 ```
 
-### 2. Clone the real-world target repo (for live MutaCI runs)
-
-MutaCI runs against **class-validator** — a TypeScript + Jest project with 10k+ stars, used by real production teams.
-
-```bash
-git clone https://github.com/typestack/class-validator.git real-target-jest
-cd real-target-jest && npm install && cd ..
-```
-
-### 3. Python environment
+### Step 2 — Python environment
 
 ```bash
 python -m venv venv
@@ -89,12 +98,11 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-pip install torch transformers safetensors numpy huggingface_hub
 ```
 
-### 4. Download Laya model weights
+### Step 3 — Download Laya model weights
 
-The weights (~804 MB) are not in git. Download from HuggingFace:
+The weights (~804 MB) are not in git — download from HuggingFace:
 
 ```bash
 python -c "
@@ -105,9 +113,9 @@ print('Laya model ready.')
 ```
 
 > **HuggingFace repo:** https://huggingface.co/convaiinnovations/laya  
-> If the download fails unauthenticated, set `HF_TOKEN` in your environment.
+> If the download requires auth, set `HF_TOKEN` in your environment first.
 
-### 5. Demo app dependencies
+### Step 4 — Demo app dependencies
 
 ```bash
 cd demo-app
@@ -115,35 +123,44 @@ npm install
 cd ..
 ```
 
-### 6. Environment variables
-
-Copy `.env.example` to `.env` and fill in your key:
+### Step 5 — Set API keys (optional)
 
 ```bash
 cp .env.example .env
+# Edit .env and fill in ANTHROPIC_API_KEY if you want live Claude calls
 ```
 
-```env
-# .env.example
-
-# Required for live Claude test generation (optional — demo mode works without it)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Optional: HuggingFace token for authenticated model downloads
-HF_TOKEN=hf_...
+```
+# .env
+ANTHROPIC_API_KEY=sk-ant-...    # Optional: Claude test generation
+HF_TOKEN=hf_...                 # Optional: authenticated HuggingFace downloads
 ```
 
----
-
-## Running the Demo
-
-### Full 5-module platform demo (recommended)
+### Step 6 — Run the platform demo
 
 ```bash
 python -m ghostbuster.run_platform --demo
 ```
 
-### Individual modules
+---
+
+## Running Tests
+
+```bash
+# All demo-app Jest tests (16 base + 4 MutaCI-generated)
+cd demo-app
+npx jest
+
+# Only the MutaCI-generated pricing gap tests
+npx jest tests/pricing.mutaci.test.ts
+
+# With coverage
+npx jest --coverage
+```
+
+---
+
+## Running Individual Modules
 
 ```bash
 # Module 1: MutaCI — PR behavioral gap detection
@@ -159,18 +176,15 @@ python -m ghostbuster.causaltrace.run_causaltrace --demo
 python -m ghostbuster.bugport.run_bugport --demo
 ```
 
-### Run against real code (MutaCI on class-validator)
+### Live MutaCI run against class-validator (TypeScript, 10k+ stars)
 
 ```bash
+# Clone the real-world target first
+git clone https://github.com/typestack/class-validator.git real-target-jest
+cd real-target-jest && npm install && cd ..
+
+# Run (5-15 min, no --demo flag)
 python -m ghostbuster.mutaci.run_mutaci --project real-target-jest/
-```
-
-### Run the demo-app tests
-
-```bash
-cd demo-app
-npx jest                               # 16 base tests
-npx jest tests/pricing.mutaci.test.ts  # 4 MutaCI-generated tests
 ```
 
 ---
@@ -179,6 +193,17 @@ npx jest tests/pricing.mutaci.test.ts  # 4 MutaCI-generated tests
 
 ```
 Ghost-Hunter-AI/
+├── bob_sessions/                 # IBM Bob IDE integration
+│   ├── session_config.json       # Agent mode config — Bob reads this
+│   ├── tools/                    # MCP tool definitions (one per module)
+│   │   ├── mutaci.json
+│   │   ├── flakehunter.json
+│   │   ├── causaltrace.json
+│   │   └── bugport.json
+│   └── workflows/                # Named agent workflows
+│       ├── pr_review.json        # Triggered on PR open
+│       └── incident_response.json
+│
 ├── ghostbuster/                  # Core Python platform
 │   ├── mutaci/                   # Module 1: PR mutation testing
 │   ├── flakehunter/              # Module 2: CI flake classification + fix
@@ -186,6 +211,11 @@ Ghost-Hunter-AI/
 │   ├── bugport/                  # Module 4: Production reproduction
 │   ├── shared/
 │   │   └── laya_client.py        # Laya AI wrapper (real model + heuristic fallback)
+│   ├── laya_finetune/            # Domain fine-tuning for Laya
+│   │   ├── train.py              # Fine-tuning script (full + LoRA)
+│   │   └── data/
+│   │       ├── ghostbuster_train.jsonl   # Labelled training data (Schema A)
+│   │       └── README.md                 # Data format + labelling guide
 │   └── run_platform.py           # Unified 5-min demo runner
 │
 ├── laya_model/                   # Laya inference scripts (weights downloaded separately)
@@ -197,7 +227,7 @@ Ghost-Hunter-AI/
 │   ├── src/                      # pricing.ts, cart.ts, inventory.ts
 │   └── tests/                    # Base tests + MutaCI-generated tests
 │
-├── real-target-jest/             # Cloned separately — typestack/class-validator
+├── real-target-jest/             # Clone separately: typestack/class-validator
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -216,6 +246,29 @@ Ghost-Hunter-AI/
 | Code Transform | OpenRewrite LST (compile-verified patches) |
 | Runtime Telemetry | MCP (Model Context Protocol) |
 | Demo Language | TypeScript (demo-app) + Python (platform) |
+
+---
+
+## Laya Fine-Tuning (Domain Adaptation)
+
+The base Laya checkpoint was trained on general agent tasks. GhostBuster includes a domain fine-tuning setup to improve accuracy on:
+
+- **Flake root cause classification** (5 categories: async/state/ordering/environment/resource)
+- **Mutation severity scoring** (10 levels, with soft labels for payment/security paths)
+- **PII detection in code context** (code identifiers ≠ PII; email/token = PII)
+
+```bash
+# Full fine-tune (~2-4 hrs on A10G, ~8-10 GB VRAM):
+python ghostbuster/laya_finetune/train.py
+
+# LoRA fine-tune (~30-45 min on T4, ~8 GB VRAM):
+python ghostbuster/laya_finetune/train.py --lora
+
+# Dry run (validates script, no GPU required):
+python ghostbuster/laya_finetune/train.py --dry-run
+```
+
+See [`ghostbuster/laya_finetune/data/README.md`](ghostbuster/laya_finetune/data/README.md) for the full data format, label guide, and collection strategy.
 
 ---
 

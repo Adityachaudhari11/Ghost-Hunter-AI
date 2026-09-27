@@ -1,0 +1,38 @@
+{
+  "name": "pr_review",
+  "description": "GhostBuster PR Review — When a PR is opened, automatically run MutaCI to find behavioral gaps, classify severity via Laya AI, and generate targeted tests.",
+  "version": "1.0.0",
+  "trigger": "pr_opened",
+  "steps": [
+    {
+      "id": "scope_diff",
+      "name": "Scope changed files",
+      "description": "Identify which TypeScript files changed in the PR diff.",
+      "tool": "mutaci",
+      "input_mapping": {
+        "pr_description": "${trigger.pr_description}",
+        "project": "${trigger.repo_path}"
+      }
+    },
+    {
+      "id": "severity_triage",
+      "name": "Laya severity triage",
+      "description": "Laya AI scores each surviving mutant (1-10). Mutants scoring ≥7 are escalated.",
+      "depends_on": ["scope_diff"],
+      "condition": "${scope_diff.surviving_mutants} > 0"
+    },
+    {
+      "id": "generate_tests",
+      "name": "Generate targeted tests (Claude)",
+      "description": "Claude generates one test per surviving mutant with severity ≥ 4.",
+      "depends_on": ["severity_triage"],
+      "condition": "${severity_triage.high_severity_count} > 0"
+    },
+    {
+      "id": "open_pr_comment",
+      "name": "Post PR comment",
+      "description": "Post a structured comment on the PR with the MutaCI report and links to generated tests.",
+      "depends_on": ["generate_tests"]
+    }
+  ]
+}

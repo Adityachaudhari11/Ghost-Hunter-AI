@@ -1,0 +1,27 @@
+{
+  "name": "GhostBuster",
+  "description": "Closed-loop, self-healing developer workflow. Bug signals → Laya AI (System 1) → Bob IDE (System 2) → compile-safe PR.",
+  "version": "1.0.0",
+  "mode": "agent",
+  "tools_dir": "bob_sessions/tools",
+  "workflows_dir": "bob_sessions/workflows",
+  "tools": [
+    "bob_sessions/tools/mutaci.json",
+    "bob_sessions/tools/flakehunter.json",
+    "bob_sessions/tools/causaltrace.json",
+    "bob_sessions/tools/bugport.json"
+  ],
+  "workflows": [
+    "bob_sessions/workflows/pr_review.json",
+    "bob_sessions/workflows/incident_response.json"
+  ],
+  "environment": {
+    "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+    "HF_TOKEN": "${HF_TOKEN}"
+  },
+  "laya": {
+    "model_dir": "laya_model",
+    "weights_file": "model.safetensors",
+    "fallback": "heuristics"
+  }
+}

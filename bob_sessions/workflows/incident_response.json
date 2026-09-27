@@ -1,0 +1,41 @@
+{
+  "name": "incident_response",
+  "description": "GhostBuster Incident Response — When a Sentry/Datadog alert fires, automatically trace root cause via CausalTrace, assess PII risk via Laya AI, and generate a compile-safe fix.",
+  "version": "1.0.0",
+  "trigger": "alert_received",
+  "steps": [
+    {
+      "id": "fetch_trace",
+      "name": "Fetch stack trace",
+      "description": "Pull the full stack trace and error metadata from Sentry/Datadog.",
+      "tool": "causaltrace",
+      "input_mapping": {
+        "sentry_url": "${trigger.alert_url}",
+        "repo_path": "${trigger.repo_path}"
+      }
+    },
+    {
+      "id": "pii_check",
+      "name": "PII safety check (Laya)",
+      "description": "Laya noul checks whether the implicated snapshot fields contain PII before including them in the fix context.",
+      "depends_on": ["fetch_trace"],
+      "tool": "bugport",
+      "input_mapping": {
+        "snapshot_json": "${fetch_trace.snapshot}",
+        "bug_description": "${fetch_trace.causal_narrative}"
+      }
+    },
+    {
+      "id": "generate_fix",
+      "name": "Generate compile-safe fix (Claude)",
+      "description": "Claude synthesises a fix from the causal narrative. Fix is validated at the AST level.",
+      "depends_on": ["pii_check"]
+    },
+    {
+      "id": "open_fix_pr",
+      "name": "Open fix PR",
+      "description": "Open a PR with the generated fix, causal narrative, and test regression.",
+      "depends_on": ["generate_fix"]
+    }
+  ]
+}
